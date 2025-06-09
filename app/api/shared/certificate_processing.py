@@ -1,0 +1,114 @@
+# app/api/shared/certificate_processing.py
+
+"""
+Shared utilities for certificate text extraction and parsing.
+"""
+
+import hashlib
+from datetime import datetime, date
+from typing import Dict, Optional
+
+
+def extract_text_from_file(file_content: bytes, filename: str) -> str:
+    """Extract text from various file types - imported from main logic"""
+    from ...main import extract_text_from_file as main_extract
+
+    return main_extract(file_content, filename)
+
+
+def parse_certificate_text(text: str) -> dict:
+    """Parse certificate text - imported from main logic"""
+    from ...main import parse_certificate_text as main_parse
+
+    return main_parse(text)
+
+
+def parse_date(date_str: str) -> Optional[date]:
+    """Parse various date formats from certificates"""
+    if not date_str:
+        return None
+
+    try:
+        # Handle ISO format first
+        if "-" in date_str and len(date_str.split("-")) == 3:
+            return datetime.fromisoformat(date_str).date()
+
+        # Handle "Friday, June 6, 2025" format
+        if "," in date_str and len(date_str.split()) >= 3:
+            parts = date_str.replace(",", "").split()
+            month_name = parts[-3]
+            day = int(parts[-2])
+            year = int(parts[-1])
+
+            month_map = {
+                "January": 1,
+                "February": 2,
+                "March": 3,
+                "April": 4,
+                "May": 5,
+                "June": 6,
+                "July": 7,
+                "August": 8,
+                "September": 9,
+                "October": 10,
+                "November": 11,
+                "December": 12,
+            }
+
+            month = month_map.get(month_name)
+            if month:
+                return date(year, month, day)
+
+        # Try other common formats
+        for fmt in ["%m/%d/%Y", "%Y-%m-%d", "%B %d, %Y"]:
+            try:
+                return datetime.strptime(date_str, fmt).date()
+            except ValueError:
+                continue
+
+    except (ValueError, KeyError, IndexError):
+        pass
+
+    return date.today()  # Default to today if parsing fails
+
+
+def generate_file_hash(file_content: bytes) -> str:
+    """Generate SHA256 hash for file content"""
+    return hashlib.sha256(file_content).hexdigest()
+
+
+def validate_file_type(filename: str) -> tuple[bool, str]:
+    """
+    Validate if file type is supported
+    Returns: (is_valid, file_extension)
+    """
+    supported_types = ["pdf", "jpg", "jpeg", "png", "tiff", "bmp"]
+    file_ext = filename.lower().split(".")[-1] if "." in filename else ""
+
+    is_valid = file_ext in supported_types
+    return is_valid, file_ext
+
+
+def extract_and_parse_certificate(file_content: bytes, filename: str) -> Dict:
+    """
+    Complete certificate processing pipeline
+    Returns extracted and parsed data
+    """
+    # Validate file type
+    is_valid, file_ext = validate_file_type(filename)
+    if not is_valid:
+        raise ValueError(f"Unsupported file type: {file_ext}")
+
+    # Generate hash
+    file_hash = generate_file_hash(file_content)
+
+    # Extract text and parse data
+    extracted_text = extract_text_from_file(file_content, filename)
+    extracted_data = parse_certificate_text(extracted_text)
+
+    return {
+        "file_hash": file_hash,
+        "file_ext": file_ext,
+        "extracted_text": extracted_text,
+        "extracted_data": extracted_data,
+    }

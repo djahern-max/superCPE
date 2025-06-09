@@ -1,0 +1,170 @@
+# SuperCPE Backend .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Environment Variables
+.env
+.env.local
+.env.production
+.env.staging
+.env.development
+
+# Database
+*.db
+*.sqlite3
+*.sqlite
+supercpe.db
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+log/
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Certificate Files (uploaded by users)
+uploads/
+certificates/
+*.pdf
+*.jpg
+*.jpeg
+*.png
+*.tiff
+*.bmp
+
+# Google Credentials (sensitive)
+google-credentials.json
+service-account-key.json
+*.json.key
+
+# Alembic
+alembic/versions/*.py
+!alembic/versions/__init__.py
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# Jupyter Notebooks (if any)
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# Poetry
+poetry.lock
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Backup files
+*.bak
+*.backup
+backup_*
+
+# Development notes
+notes.txt
+TODO.md
+NOTES.md
+
+# Local configuration
+local_settings.py
+settings_local.py
+
+# Media files (if you store them locally)
+media/
+
+# Static files (production)
+staticfiles/
+static/
+
+# FastAPI specific
+.fastapi/
+
+# Package manager
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Terraform (if used for infrastructure)
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Secrets
+secrets/
+*.key
+*.pem
+*.crt
+notes.txt
