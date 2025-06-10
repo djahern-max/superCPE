@@ -89,9 +89,10 @@ google-credentials.json
 service-account-key.json
 *.json.key
 
-# Alembic
-alembic/versions/*.py
-!alembic/versions/__init__.py
+# REMOVED THE ALEMBIC VERSIONS EXCLUSION
+# We WANT to track migration files in git so they can be deployed
+# alembic/versions/*.py  <-- REMOVED THIS LINE
+# !alembic/versions/__init__.py  <-- REMOVED THIS LINE
 
 # Testing
 .pytest_cache/
