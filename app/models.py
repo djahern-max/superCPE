@@ -1,3 +1,4 @@
+# Updated User model in models.py
 from sqlalchemy import (
     Column,
     Integer,
@@ -17,44 +18,66 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 Base = declarative_base()
 
-# =================
-# USER MODELS
-# =================
-
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
-    password_hash = Column(String, nullable=False)  # NEW: Store hashed password
+    password_hash = Column(String, nullable=False)
     full_name = Column(String, nullable=False)
     license_number = Column(String)
-    primary_jurisdiction = Column(
-        String(2), default="NH"
-    )  # Primary state for CPA license
-    secondary_jurisdictions = Column(
-        String
-    )  # Comma-separated list of additional states
+    primary_jurisdiction = Column(String(2), default="NH")
+    secondary_jurisdictions = Column(String)
 
     # CPA-specific fields
     license_issue_date = Column(Date)
     next_renewal_date = Column(Date)
+
+    # Contact Information for Marketing
+    phone_number = Column(String(20))  # Professional phone number
+    linkedin_url = Column(String(500))  # LinkedIn profile URL
+    twitter_handle = Column(String(100))  # Twitter handle (without @)
+    facebook_url = Column(String(500))  # Facebook profile/page URL
+    instagram_handle = Column(String(100))  # Instagram handle (without @)
+    website_url = Column(String(500))  # Personal/professional website
+
+    # Firm Information
+    firm_name = Column(String(200))  # Name of accounting firm/company
+    firm_website = Column(String(500))  # Firm's website URL
+    firm_phone = Column(String(20))  # Firm's main phone number
+    firm_address_line1 = Column(String(200))  # Firm street address
+    firm_address_line2 = Column(String(200))  # Firm address line 2 (suite, etc.)
+    firm_city = Column(String(100))  # Firm city
+    firm_state = Column(String(2))  # Firm state code
+    firm_zip_code = Column(String(10))  # Firm ZIP code
+    job_title = Column(
+        String(100)
+    )  # Job title at firm (Partner, Senior Associate, etc.)
+
+    # Professional Details
+    years_experience = Column(Integer)  # Years of CPA experience
+    specializations = Column(
+        String(500)
+    )  # Comma-separated specialties (Tax, Audit, etc.)
+    professional_certifications = Column(String(500))  # Other certs (CFA, CIA, etc.)
 
     # CE Broker integration
     ce_broker_id = Column(String)
     ce_broker_auto_sync = Column(Boolean, default=False)
 
     # Onboarding tracking
-    onboarding_step = Column(
-        String, default="registration"
-    )  # NEW: Track onboarding progress
+    onboarding_step = Column(String, default="registration")
 
-    # User preferences (NEW)
+    # User preferences
     email_reminders = Column(Boolean, default=True)
     newsletter_subscription = Column(Boolean, default=False)
+    marketing_emails = Column(
+        Boolean, default=False
+    )  # Marketing communications consent
+    public_profile = Column(Boolean, default=False)  # Allow public profile visibility
 
-    # Authentication (NEW)
+    # Authentication
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     last_login = Column(DateTime)
