@@ -1,21 +1,20 @@
-# Updated User model in models.py
 from sqlalchemy import (
     Column,
     Integer,
     String,
-    DateTime,
-    Float,
-    Boolean,
     Text,
-    ForeignKey,
+    DateTime,
     Date,
-    DECIMAL,
+    Boolean,
+    Float,
+    ForeignKey,
+    func,
 )
+from sqlalchemy.dialects.postgresql import JSON, JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime, date
-
-from sqlalchemy.dialects.postgresql import JSON, JSONB
+from uuid import uuid4
 
 Base = declarative_base()
 
