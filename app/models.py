@@ -14,7 +14,8 @@ from sqlalchemy import (
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime, date
-from sqlalchemy.dialects.postgresql import JSONB
+
+from sqlalchemy.dialects.postgresql import JSON
 
 Base = declarative_base()
 
