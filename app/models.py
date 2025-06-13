@@ -349,9 +349,8 @@ class RequirementChange(Base):
 class OnboardingProgress(Base):
     __tablename__ = "onboarding_progress"
 
-    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    current_step = Column(String, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     completed_steps = Column(JSON, default=list)
     step_data = Column(JSON, default=dict)
     created_at = Column(DateTime, default=func.now())
