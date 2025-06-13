@@ -8,11 +8,13 @@ from enum import Enum
 # ENUMS
 # =================
 
+
 class DeliveryMethod(str, Enum):
     QAS_SELF_STUDY = "QAS Self-Study"
     GROUP_LIVE = "Group Live"
     GROUP_INTERNET = "Group Internet"
     NANO_LEARNING = "Nano Learning"
+
 
 class FieldOfStudy(str, Enum):
     ACCOUNTING = "Accounting"
@@ -23,10 +25,12 @@ class FieldOfStudy(str, Enum):
     PERSONNEL_HR = "Personnel / Human Resources"
     COMMUNICATIONS = "Communications and Marketing"
 
+
 class ReportingPeriodType(str, Enum):
     ANNUAL = "annual"
     BIENNIAL = "biennial"
     TRIENNIAL = "triennial"
+
 
 class ComplianceStatus(str, Enum):
     COMPLIANT = "compliant"
@@ -34,9 +38,11 @@ class ComplianceStatus(str, Enum):
     APPROACHING_DEADLINE = "approaching_deadline"
     UNKNOWN = "unknown"
 
+
 # =================
 # CPE CERTIFICATE EXTRACTION
 # =================
+
 
 class CPECertificateData(BaseModel):
     course_name: str = Field(..., min_length=1, max_length=500)
@@ -48,14 +54,15 @@ class CPECertificateData(BaseModel):
     delivery_method: Optional[DeliveryMethod] = None
     nasba_sponsor_id: Optional[str] = Field(None, max_length=20)
     is_ethics: bool = False
-    
-    @validator('completion_date')
+
+    @validator("completion_date")
     def validate_completion_date(cls, v):
         if v > date.today():
-            raise ValueError('Completion date cannot be in the future')
+            raise ValueError("Completion date cannot be in the future")
         if v < date(1990, 1, 1):
-            raise ValueError('Completion date seems too old')
+            raise ValueError("Completion date seems too old")
         return v
+
 
 class CPERecordCreate(BaseModel):
     course_name: str
@@ -68,6 +75,7 @@ class CPERecordCreate(BaseModel):
     nasba_sponsor_id: Optional[str] = None
     is_ethics: bool = False
     certificate_filename: Optional[str] = None
+
 
 class CPERecordResponse(BaseModel):
     id: int
@@ -85,9 +93,10 @@ class CPERecordResponse(BaseModel):
     extracted_at: datetime
     extraction_confidence: Optional[float]
     ce_broker_submitted: bool
-    
+
     class Config:
         from_attributes = True
+
 
 class CPEProcessingResult(BaseModel):
     id: Optional[int] = None
@@ -97,15 +106,18 @@ class CPEProcessingResult(BaseModel):
     confidence_score: Optional[float] = None
     validation_errors: Optional[List[str]] = None
 
+
 # =================
 # COMPLIANCE TRACKING
 # =================
+
 
 class ComplianceCheck(BaseModel):
     jurisdiction_code: str = Field(..., min_length=2, max_length=2)
     reporting_period_start: date
     reporting_period_end: date
-    
+
+
 class ComplianceStatusData(BaseModel):
     is_compliant: bool
     total_hours_completed: Decimal
@@ -117,7 +129,8 @@ class ComplianceStatusData(BaseModel):
     next_renewal_date: Optional[date]
     days_until_renewal: Optional[int]
     compliance_percentage: float
-    
+
+
 class ComplianceSummary(BaseModel):
     user_id: int
     primary_jurisdiction: str
@@ -125,10 +138,12 @@ class ComplianceSummary(BaseModel):
     secondary_jurisdictions: Optional[List[ComplianceStatusData]] = []
     recent_courses: List[CPERecordResponse]
     recommendations: List[str]
-    
+
+
 # =================
 # JURISDICTION MANAGEMENT
 # =================
+
 
 class CPAJurisdictionBase(BaseModel):
     code: str = Field(..., min_length=2, max_length=2)
@@ -138,12 +153,14 @@ class CPAJurisdictionBase(BaseModel):
     reporting_period_type: ReportingPeriodType
     reporting_period_months: int = Field(..., gt=0, le=36)
 
+
 class CPAJurisdictionCreate(CPAJurisdictionBase):
     board_name: Optional[str] = None
     board_website: Optional[str] = None
     renewal_date_pattern: Optional[str] = None
     reporting_period_description: Optional[str] = None
     ce_broker_required: bool = False
+
 
 class CPAJurisdictionResponse(CPAJurisdictionBase):
     board_name: Optional[str]
@@ -154,9 +171,10 @@ class CPAJurisdictionResponse(CPAJurisdictionBase):
     carry_forward_max_hours: Optional[int]
     ce_broker_required: bool
     nasba_last_updated: Optional[date]
-    
+
     class Config:
         from_attributes = True
+
 
 class CPAJurisdictionUpdate(BaseModel):
     name: Optional[str] = None
@@ -166,9 +184,11 @@ class CPAJurisdictionUpdate(BaseModel):
     board_website: Optional[str] = None
     ce_broker_required: Optional[bool] = None
 
+
 # =================
 # USER MANAGEMENT
 # =================
+
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -176,10 +196,12 @@ class UserBase(BaseModel):
     license_number: Optional[str] = Field(None, max_length=50)
     primary_jurisdiction: str = Field(default="NH", min_length=2, max_length=2)
 
+
 class UserCreate(UserBase):
     secondary_jurisdictions: Optional[List[str]] = None
     license_issue_date: Optional[date] = None
     next_renewal_date: Optional[date] = None
+
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(None, min_length=1, max_length=200)
@@ -189,6 +211,7 @@ class UserUpdate(BaseModel):
     next_renewal_date: Optional[date] = None
     ce_broker_auto_sync: Optional[bool] = None
 
+
 class UserResponse(UserBase):
     id: int
     secondary_jurisdictions: Optional[str]
@@ -196,17 +219,20 @@ class UserResponse(UserBase):
     next_renewal_date: Optional[date]
     ce_broker_auto_sync: bool
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
+
 
 # =================
 # NASBA PROVIDER SCHEMAS
 # =================
 
+
 class NASBAProviderBase(BaseModel):
     sponsor_id: str = Field(..., max_length=20)
     sponsor_name: str = Field(..., min_length=1, max_length=200)
+
 
 class NASBAProviderCreate(NASBAProviderBase):
     registry_status: Optional[str] = "Active"
@@ -214,6 +240,7 @@ class NASBAProviderCreate(NASBAProviderBase):
     group_live: bool = False
     group_internet: bool = False
     self_study: bool = False
+
 
 class NASBAProviderResponse(NASBAProviderBase):
     id: int
@@ -223,13 +250,15 @@ class NASBAProviderResponse(NASBAProviderBase):
     group_internet: bool
     self_study: bool
     last_verified: Optional[date]
-    
+
     class Config:
         from_attributes = True
+
 
 # =================
 # CE BROKER INTEGRATION
 # =================
+
 
 class CEBrokerSubmission(BaseModel):
     course_name: str
@@ -239,15 +268,18 @@ class CEBrokerSubmission(BaseModel):
     subject_area: Optional[str] = None
     certificate_url: Optional[str] = None
 
+
 class CEBrokerResponse(BaseModel):
     submission_id: Optional[str]
     status: str  # "success", "pending", "failed"
     message: Optional[str]
     submitted_at: datetime
 
+
 # =================
 # ANALYTICS & REPORTING
 # =================
+
 
 class CPEAnalytics(BaseModel):
     total_courses: int
@@ -259,6 +291,7 @@ class CPEAnalytics(BaseModel):
     average_course_length: Decimal
     compliance_rate: float
 
+
 class JurisdictionStats(BaseModel):
     jurisdiction_code: str
     jurisdiction_name: str
@@ -267,9 +300,11 @@ class JurisdictionStats(BaseModel):
     average_completion_rate: float
     most_popular_providers: List[Dict[str, Any]]
 
+
 # =================
 # DASHBOARD SCHEMAS
 # =================
+
 
 class DashboardData(BaseModel):
     user: UserResponse
@@ -279,6 +314,7 @@ class DashboardData(BaseModel):
     quick_stats: CPEAnalytics
     recommendations: List[str]
 
+
 class CPEPlanningData(BaseModel):
     hours_needed: Decimal
     ethics_hours_needed: Decimal
@@ -287,9 +323,11 @@ class CPEPlanningData(BaseModel):
     suggested_courses: List[Dict[str, Any]]
     deadline_alerts: List[str]
 
+
 # =================
 # API RESPONSES
 # =================
+
 
 class HealthResponse(BaseModel):
     status: str
@@ -297,12 +335,14 @@ class HealthResponse(BaseModel):
     database_status: str = "connected"
     nasba_sync_status: str = "unknown"
 
+
 class BulkOperationResponse(BaseModel):
     total_processed: int
     successful: int
     failed: int
     errors: List[str]
-    
+
+
 class DataSyncResponse(BaseModel):
     sync_id: int
     status: str

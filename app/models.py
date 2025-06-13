@@ -29,6 +29,8 @@ class User(Base):
     license_number = Column(String)
     primary_jurisdiction = Column(String(2), default="NH")
     secondary_jurisdictions = Column(String)
+    onboarding_completed = Column(Boolean, default=False)
+    onboarding_step = Column(String, nullable=True)
 
     # CPA-specific fields
     license_issue_date = Column(Date)
@@ -336,3 +338,21 @@ class RequirementChange(Base):
 
     # Relationships
     jurisdiction = relationship("CPAJurisdiction")
+
+
+# =================
+# ONBOARDING PROGRESS
+# =================
+
+
+class OnboardingProgress(Base):
+    __tablename__ = "onboarding_progress"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    current_step = Column(String, nullable=True)
+    completed_steps = Column(JSON, default=list)
+    step_data = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    completed_at = Column(DateTime, nullable=True)
