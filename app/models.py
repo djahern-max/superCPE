@@ -351,6 +351,7 @@ class OnboardingProgress(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    current_step = Column(String, nullable=True)  # This line is missing
     completed_steps = Column(JSON, default=list)
     step_data = Column(JSON, default=dict)
     created_at = Column(DateTime, default=func.now())
