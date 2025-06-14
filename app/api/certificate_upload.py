@@ -68,9 +68,8 @@ def extract_basic_text(file_content: bytes, filename: str) -> str:
         from app.services.vision_service import VisionService
 
         vision = VisionService()
-        return vision.extract_text_from_image(file_content)
+        return vision.extract_text(file_content, filename)  # Use the new method
     except Exception as e:
-        # Fallback to basic PDF extraction
         return f"Vision extraction failed: {str(e)}"
 
 
