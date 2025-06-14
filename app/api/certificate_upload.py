@@ -74,7 +74,7 @@ def extract_basic_text(file_content: bytes, filename: str) -> str:
 
 
 def parse_certificate_data(text: str, filename: str) -> dict:
-    """Parse certificate data from extracted text"""
+    """Enhanced certificate data parser with better pattern recognition"""
     # Initialize with defaults
     data = {
         "course_name": "Unknown Course",
@@ -88,49 +88,177 @@ def parse_certificate_data(text: str, filename: str) -> dict:
         "extracted_text": text,
     }
 
-    # Basic text parsing
-    if text and len(text) > 10:  # If we have actual text
-        lines = text.split("\n")
+    if not text or len(text) < 10:
+        return data
 
-        # Look for hours/credits
-        for line in lines:
-            line = line.strip()
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    text_lower = text.lower()
 
-            # Extract CPE hours
-            hours_match = re.search(
-                r"(\d+\.?\d*)\s*(hours?|credits?|cpe)", line, re.IGNORECASE
-            )
-            if hours_match:
-                try:
-                    data["cpe_credits"] = float(hours_match.group(1))
-                except ValueError:
-                    pass
+    # =================
+    # PROVIDER EXTRACTION
+    # =================
+    provider_patterns = [
+        r"^([A-Za-z\s&.,-]+)(?:\n|$)",  # First line often contains provider
+        r"(MasterCPE|NASBA|CPE\s*Central|Becker|Wiley|Thomson Reuters|CCH)",
+        r"([A-Za-z\s&.,-]+)\s*(?:Professional|Education|Training|Institute|Academy)",
+    ]
 
-            # Look for dates
-            date_match = re.search(r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})", line)
-            if date_match:
-                try:
-                    date_str = date_match.group(1)
-                    # Parse MM/DD/YYYY or MM-DD-YYYY
-                    if "/" in date_str:
-                        month, day, year = map(int, date_str.split("/"))
-                    else:
-                        month, day, year = map(int, date_str.split("-"))
-                    data["completion_date"] = date(year, month, day)
-                except ValueError:
-                    pass
+    for pattern in provider_patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        if match and len(match.group(1).strip()) > 3:
+            # Clean up common OCR artifacts
+            provider = re.sub(r"[^\w\s&.,-]", "", match.group(1).strip())
+            if provider and provider.lower() not in [
+                "certificate",
+                "completion",
+                "awarded",
+            ]:
+                data["provider_name"] = provider
+                break
 
-            # Look for ethics keywords
-            if any(
-                word in line.lower()
-                for word in ["ethics", "ethical", "professional responsibility"]
-            ):
-                data["is_ethics"] = True
+    # =================
+    # COURSE NAME EXTRACTION
+    # =================
+    course_name_patterns = [
+        # Pattern 1: "for successfully completing [COURSE NAME]"
+        r"for\s+successfully\s+completing\s*[\n\r]*\s*([^\n\r]+)",
+        # Pattern 2: "completion of [COURSE NAME]"
+        r"completion\s+of\s*[\n\r]*\s*([^\n\r]+)",
+        # Pattern 3: After "subject:" or "course:"
+        r"(?:subject|course|title)\s*:?\s*[\n\r]*\s*([^\n\r]+)",
+        # Pattern 4: Line after "certificate of completion"
+        r"certificate\s+of\s+completion\s*[\n\r]+(?:[^\n\r]*[\n\r]+)*?\s*([^\n\r]+)",
+        # Pattern 5: Between common certificate phrases
+        r"(?:awarded\s+to\s+[^\n\r]+\s*[\n\r]+\s*(?:for\s+)?(?:successfully\s+)?(?:completing\s+)?)\s*([^\n\r]+)",
+    ]
 
-        # If we found hours but no date, keep today's date
-        # If we found a date but no hours, default to 1 hour
-        if data["cpe_credits"] == 0.0:
-            data["cpe_credits"] = 1.0  # Default assumption
+    for pattern in course_name_patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        if match:
+            course_name = match.group(1).strip()
+            # Clean the course name
+            course_name = re.sub(
+                r"^\W+|\W+$", "", course_name
+            )  # Remove leading/trailing non-word chars
+            course_name = re.sub(r"\s+", " ", course_name)  # Normalize whitespace
+
+            # Filter out common false positives
+            if (
+                len(course_name) > 5
+                and course_name.lower()
+                not in [
+                    "certificate",
+                    "completion",
+                    "awarded",
+                    "daniel ahern",
+                    "elizabeth kolar",
+                ]
+                and not re.match(r"^[A-Z]\d+", course_name)
+            ):  # Skip course codes
+                data["course_name"] = course_name
+                break
+
+    # =================
+    # COURSE CODE EXTRACTION
+    # =================
+    course_code_patterns = [
+        r"course\s+code\s*:?\s*([A-Z]\d+[-\w]*)",
+        r"(?:code|id)\s*:?\s*([A-Z]\d+[-\w]*)",
+        r"\b([A-Z]\d{2,5}[-\w]*)\b",  # General pattern like M290-20
+    ]
+
+    for pattern in course_code_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            data["course_code"] = match.group(1)
+            break
+
+    # =================
+    # CPE CREDITS EXTRACTION
+    # =================
+    credit_patterns = [
+        r"(\d+\.?\d*)\s*(?:cpe\s*)?(?:hours?|credits?)",
+        r"(?:hours?|credits?)\s*:?\s*(\d+\.?\d*)",
+        r"(\d+\.?\d*)\s*continuing\s+professional\s+education",
+        r"total\s*:?\s*(\d+\.?\d*)\s*(?:hours?|credits?)",
+    ]
+
+    for pattern in credit_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            try:
+                credits = float(match.group(1))
+                if 0.5 <= credits <= 40:  # Reasonable range for CPE credits
+                    data["cpe_credits"] = credits
+                    break
+            except ValueError:
+                continue
+
+    # =================
+    # DATE EXTRACTION
+    # =================
+    date_patterns = [
+        r"(?:completed?|dated?|issued)\s*:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})",
+        r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})",
+        r"(\w+\s+\d{1,2},?\s+\d{4})",  # "January 15, 2024"
+        r"(\d{1,2}\s+\w+\s+\d{4})",  # "15 January 2024"
+    ]
+
+    for pattern in date_patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        for date_str in matches:
+            try:
+                # Try different date formats
+                for fmt in ["%m/%d/%Y", "%m-%d-%Y", "%d/%m/%Y", "%d-%m-%Y"]:
+                    try:
+                        parsed_date = datetime.strptime(date_str, fmt).date()
+                        # Check if date is reasonable (not in future, not too old)
+                        if date(2020, 1, 1) <= parsed_date <= date.today():
+                            data["completion_date"] = parsed_date
+                            break
+                    except ValueError:
+                        continue
+                if data["completion_date"] != date.today():
+                    break
+            except:
+                continue
+
+    # =================
+    # ETHICS DETECTION
+    # =================
+    ethics_keywords = [
+        "ethics",
+        "ethical",
+        "professional responsibility",
+        "professional conduct",
+        "integrity",
+        "independence",
+    ]
+
+    if any(keyword in text_lower for keyword in ethics_keywords):
+        data["is_ethics"] = True
+
+    # =================
+    # FIELD OF STUDY DETECTION
+    # =================
+    field_mapping = {
+        "accounting": ["accounting", "financial", "gaap", "fasb", "audit"],
+        "taxation": ["tax", "taxation", "irs", "revenue", "deduction"],
+        "auditing": ["audit", "auditing", "assurance", "review", "compilation"],
+        "consulting": ["consulting", "advisory", "business", "management"],
+        "ethics": ["ethics", "ethical", "professional responsibility"],
+        "regulatory": ["regulation", "compliance", "law", "legal"],
+        "technology": ["technology", "software", "digital", "cyber", "it"],
+    }
+
+    for field, keywords in field_mapping.items():
+        if any(keyword in text_lower for keyword in keywords):
+            data["field_of_study"] = field.title()
+            break
+
+    # Default to 1.0 credits if none found
+    if data["cpe_credits"] == 0.0:
+        data["cpe_credits"] = 1.0
 
     return data
 
