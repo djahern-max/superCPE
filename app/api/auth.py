@@ -17,7 +17,7 @@ SECRET_KEY = (
     "your-secret-key-change-in-production"  # In production, use environment variable
 )
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30 * 24 * 60  # 30 days
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
@@ -163,45 +163,6 @@ async def register(user_data: UserRegistration, db: Session = Depends(get_db)):
 
 
 @router.post("/login")
-async def login(
-    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
-):
-    """Login user with JWT token generation"""
-
-    user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Update last login
-    user.last_login = datetime.utcnow()
-    db.commit()
-
-    # Create access token
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.email, "user_id": user.id}, expires_delta=access_token_expires
-    )
-
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "full_name": user.full_name,
-            "primary_jurisdiction": user.primary_jurisdiction,
-            "license_number": user.license_number,
-        },
-        "message": f"Welcome back, {user.full_name}!",
-    }
-
-
-@router.post("/login-json")
 async def login_json(login_data: UserLogin, db: Session = Depends(get_db)):
     """Login with JSON data (alternative to form data)"""
 
