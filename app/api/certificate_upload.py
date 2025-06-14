@@ -63,27 +63,15 @@ def validate_file_type(filename: str) -> tuple[bool, str]:
 
 
 def extract_basic_text(file_content: bytes, filename: str) -> str:
-    """Basic text extraction without external dependencies"""
-    file_ext = filename.lower().split(".")[-1] if "." in filename else ""
+    """Extract text using Google Cloud Vision for all file types"""
+    try:
+        from app.services.vision_service import VisionService
 
-    if file_ext == "pdf":
-        try:
-            # Try basic PDF text extraction
-            import PyPDF2
-
-            pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
-            text = ""
-            for page in pdf_reader.pages:
-                text += page.extract_text() + "\n"
-            return text.strip()
-        except ImportError:
-            # PyPDF2 not available, return placeholder
-            return f"PDF text extraction not available for {filename}"
-        except Exception as e:
-            return f"PDF processing error: {str(e)}"
-    else:
-        # For images, return placeholder (could add PIL/Tesseract later)
-        return f"Image text extraction not yet implemented for {filename}"
+        vision = VisionService()
+        return vision.extract_text_from_image(file_content)
+    except Exception as e:
+        # Fallback to basic PDF extraction
+        return f"Vision extraction failed: {str(e)}"
 
 
 def parse_certificate_data(text: str, filename: str) -> dict:
