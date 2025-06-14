@@ -112,3 +112,45 @@ def extract_and_parse_certificate(file_content: bytes, filename: str) -> Dict:
         "extracted_text": extracted_text,
         "extracted_data": extracted_data,
     }
+
+
+def extract_text_from_file(file_content: bytes, filename: str) -> str:
+    """Extract text from various file types using VisionService"""
+    try:
+        from ...services.vision_service import VisionService
+
+        vision = VisionService()
+        return vision.extract_text(file_content, filename)
+    except Exception as e:
+        print(f"Text extraction failed: {e}")
+        return f"Text extraction failed for {filename}"
+
+
+def parse_certificate_text(text: str) -> dict:
+    """Parse certificate text for relevant data"""
+    # Basic parsing logic - expand this based on your needs
+    parsed_data = {
+        "raw_text": text,
+        "course_title": "",
+        "completion_date": "",
+        "hours": 0,
+        "provider": "",
+        "subject": "",
+    }
+
+    # Simple text parsing - you can enhance this
+    lines = text.split("\n")
+    for line in lines:
+        line = line.strip()
+        if "hours" in line.lower() or "credit" in line.lower():
+            # Try to extract hours
+            import re
+
+            hours_match = re.search(r"(\d+\.?\d*)\s*hours?", line, re.IGNORECASE)
+            if hours_match:
+                try:
+                    parsed_data["hours"] = float(hours_match.group(1))
+                except ValueError:
+                    pass
+
+    return parsed_data
