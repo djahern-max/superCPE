@@ -128,29 +128,48 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
 
 def parse_certificate_text(text: str) -> dict:
     """Parse certificate text for relevant data"""
-    # Basic parsing logic - expand this based on your needs
+    import re
+    from datetime import date, datetime
+
+    # Basic parsing logic
     parsed_data = {
         "raw_text": text,
-        "course_title": "",
-        "completion_date": "",
-        "hours": 0,
-        "provider": "",
-        "subject": "",
+        "course_title": "Unknown Course",
+        "completion_date": date.today(),  # Default to today if not found
+        "hours": 0.0,
+        "provider": "Unknown Provider",
+        "subject": "General",
     }
 
-    # Simple text parsing - you can enhance this
+    # Simple text parsing
     lines = text.split("\n")
     for line in lines:
         line = line.strip()
-        if "hours" in line.lower() or "credit" in line.lower():
-            # Try to extract hours
-            import re
 
+        # Extract hours/credits
+        if "hours" in line.lower() or "credit" in line.lower():
             hours_match = re.search(r"(\d+\.?\d*)\s*hours?", line, re.IGNORECASE)
             if hours_match:
                 try:
                     parsed_data["hours"] = float(hours_match.group(1))
                 except ValueError:
                     pass
+
+        # Extract dates - try multiple patterns
+        date_patterns = [
+            r"(\d{1,2}\/\d{1,2}\/\d{4})",  # MM/DD/YYYY
+            r"(\d{4}-\d{1,2}-\d{1,2})",  # YYYY-MM-DD
+            r"(\w+ \d{1,2}, \d{4})",  # Month DD, YYYY
+            r"(\d{1,2}-\d{1,2}-\d{4})",  # MM-DD-YYYY
+        ]
+
+        for pattern in date_patterns:
+            date_match = re.search(pattern, line)
+            if date_match:
+                date_str = date_match.group(1)
+                parsed_date = parse_date(date_str)
+                if parsed_date:
+                    parsed_data["completion_date"] = parsed_date
+                    break
 
     return parsed_data
