@@ -12,9 +12,8 @@ import hashlib
 import io
 import re
 
-from ..models import CPERecord, User
-from ..core.database import get_db
-from ..schemas import CPERecordResponse
+from app.models import CPERecord, User
+from app.core.database import get_db
 
 
 router = APIRouter(
