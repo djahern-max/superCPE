@@ -697,3 +697,136 @@ async def test_filename_parsing():
         )
 
     return {"test_results": results, "status": "filename_parsing_test_complete"}
+
+
+@router.post("/process-test-certificates")
+async def process_test_certificates(
+    db: Session = Depends(get_db),
+    test_directory: str = "/Users/ryze.ai/Desktop/TestCPEUploads",
+):
+    """Process the test certificates from your TestCPEUploads directory"""
+    import os
+
+    try:
+        user = get_or_create_default_user(db)
+
+        if not os.path.exists(test_directory):
+            raise HTTPException(
+                status_code=404, detail=f"Test directory not found: {test_directory}"
+            )
+
+        # Get all PDF files
+        pdf_files = [f for f in os.listdir(test_directory) if f.endswith(".pdf")]
+
+        if not pdf_files:
+            return {
+                "status": "no_files",
+                "message": f"No PDF files found in {test_directory}",
+                "directory": test_directory,
+            }
+
+        results = []
+        successful_uploads = 0
+
+        for filename in pdf_files:
+            try:
+                file_path = os.path.join(test_directory, filename)
+
+                # Read file content
+                with open(file_path, "rb") as f:
+                    file_content = f.read()
+
+                # Process certificate
+                processing_result = extract_and_parse_certificate(
+                    file_content, filename
+                )
+                extracted_data = processing_result["extracted_data"]
+                file_hash = processing_result["file_hash"]
+
+                # Check for duplicates
+                existing_record = (
+                    db.query(CPERecord)
+                    .filter(
+                        CPERecord.certificate_hash == file_hash,
+                        CPERecord.user_id == user.id,
+                    )
+                    .first()
+                )
+
+                if existing_record:
+                    results.append(
+                        {
+                            "filename": filename,
+                            "status": "duplicate",
+                            "existing_record_id": existing_record.id,
+                        }
+                    )
+                    continue
+
+                # Create database record with enhanced data extraction
+                cpe_record = CPERecord(
+                    user_id=user.id,
+                    course_name=extracted_data.get(
+                        "course_name", f"Course from {filename}"
+                    ),
+                    course_code=extracted_data.get("course_code"),
+                    provider_name=extracted_data.get(
+                        "provider_name", "Professional Education Services"
+                    ),
+                    field_of_study=extracted_data.get("field_of_study", "General"),
+                    cpe_credits=float(
+                        extracted_data.get("cpe_credits", 2.0)
+                    ),  # Default 2 hours
+                    delivery_method="QAS Self-Study",
+                    completion_date=parse_date(extracted_data.get("completion_date")),
+                    certificate_filename=filename,
+                    certificate_hash=file_hash,
+                    nasba_sponsor_id="112530",
+                    extracted_at=datetime.utcnow(),
+                    extraction_confidence=0.8,  # Lower confidence for test files
+                )
+
+                db.add(cpe_record)
+                db.flush()
+
+                successful_uploads += 1
+
+                results.append(
+                    {
+                        "filename": filename,
+                        "status": "success",
+                        "record_id": cpe_record.id,
+                        "extracted_data": extracted_data,
+                        "course_name": cpe_record.course_name,
+                        "credits": float(cpe_record.cpe_credits),
+                    }
+                )
+
+            except Exception as e:
+                results.append(
+                    {"filename": filename, "status": "failed", "error": str(e)}
+                )
+
+        db.commit()
+
+        return {
+            "status": "completed",
+            "summary": {
+                "total_files": len(pdf_files),
+                "successful_uploads": successful_uploads,
+                "failed_uploads": len([r for r in results if r["status"] == "failed"]),
+                "duplicates": len([r for r in results if r["status"] == "duplicate"]),
+                "total_credits_added": sum(
+                    r.get("credits", 0) for r in results if r["status"] == "success"
+                ),
+            },
+            "results": results,
+            "test_directory": test_directory,
+            "next_step": "Use /api/ce-broker/prepare-submissions to prepare for CE Broker",
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Failed to process test certificates: {str(e)}"
+        )
