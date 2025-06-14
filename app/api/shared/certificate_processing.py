@@ -167,9 +167,13 @@ def parse_certificate_text(text: str) -> dict:
             date_match = re.search(pattern, line)
             if date_match:
                 date_str = date_match.group(1)
-                parsed_date = parse_date(date_str)
-                if parsed_date:
-                    parsed_data["completion_date"] = parsed_date
-                    break
+                try:
+                    parsed_date = parse_date(date_str)
+                    if parsed_date and isinstance(parsed_date, date):
+                        parsed_data["completion_date"] = parsed_date
+                        break
+                except Exception as e:
+                    print(f"Date parsing error: {e}")
+                    continue
 
     return parsed_data
