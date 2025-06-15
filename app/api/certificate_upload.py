@@ -252,12 +252,15 @@ def parse_certificate_data(text: str, filename: str) -> dict:
 
 
 @router.post("/process-document")
-async def upload_single_certificate(
+async def process_single_certificate(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),  # Add this
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload and process a single CPE certificate"""
+    """
+    FREE: Process and extract data from CPE certificate
+    PAID: Store certificate securely and enable CE Broker integration
+    """
     try:
         # Validate file type
         is_valid, file_ext = validate_file_type(file.filename)
@@ -267,7 +270,6 @@ async def upload_single_certificate(
                 detail=f"Unsupported file type. Supported: PDF, JPG, PNG, TIFF",
             )
 
-        # Get current user
         user = current_user
 
         # Read file content
@@ -280,7 +282,7 @@ async def upload_single_certificate(
         # Generate file hash for duplicate detection
         file_hash = generate_file_hash(file_content)
 
-        # Check for duplicates
+        # Check for duplicates (by hash AND user)
         existing_record = (
             db.query(CPERecord)
             .filter(
@@ -292,21 +294,40 @@ async def upload_single_certificate(
         if existing_record:
             return {
                 "status": "duplicate",
-                "message": "Certificate already exists in database",
+                "message": "You've already processed this certificate",
                 "existing_record_id": existing_record.id,
-                "filename": file.filename,
+                "original_filename": existing_record.original_filename,
                 "user_id": user.id,
+                "extracted_data": {
+                    "course_name": existing_record.course_name,
+                    "cpe_credits": float(existing_record.cpe_credits),
+                    "completion_date": existing_record.completion_date.isoformat(),
+                },
             }
 
-        # Extract text from certificate
+        # Extract text from certificate (FREE feature)
         extracted_text = extract_basic_text(file_content, file.filename)
 
-        # Parse certificate data
+        # Parse certificate data (FREE feature)
         parsed_data = parse_certificate_data(extracted_text, file.filename)
+
+        # Determine storage tier (business logic)
+        storage_tier = "free"  # Default for now
+        is_stored = False  # Files not stored in free tier
+        certificate_url = None  # No storage URL for free tier
+
+        # TODO: Check if user has paid subscription
+        # if user.subscription_plan in ["premium", "enterprise"]:
+        #     storage_tier = user.subscription_plan
+        #     is_stored = True
+        #     # Generate smart filename and upload to Digital Ocean
+        #     smart_filename = generate_smart_filename(parsed_data, file_ext)
+        #     certificate_url = upload_to_digital_ocean(file_content, smart_filename)
 
         # Create database record
         cpe_record = CPERecord(
             user_id=user.id,
+            # Course data (extracted for free)
             course_name=parsed_data["course_name"],
             course_code=parsed_data["course_code"],
             provider_name=parsed_data["provider_name"],
@@ -315,11 +336,18 @@ async def upload_single_certificate(
             delivery_method=parsed_data["delivery_method"],
             completion_date=parsed_data["completion_date"],
             is_ethics=parsed_data["is_ethics"],
-            certificate_filename=file.filename,
+            # File tracking
+            original_filename=file.filename,  # NEW: User's original filename
+            certificate_filename=None,  # Smart filename (paid feature)
+            certificate_url=certificate_url,  # Storage URL (paid feature)
             certificate_hash=file_hash,
-            nasba_sponsor_id="112530",  # Default NASBA sponsor
+            # Business model
+            is_stored=is_stored,  # NEW: Storage status
+            storage_tier=storage_tier,  # NEW: User's tier
+            # Metadata
+            nasba_sponsor_id="112530",
             extracted_at=datetime.utcnow(),
-            extraction_confidence=0.8,  # Basic confidence score
+            extraction_confidence=0.8,
             manually_verified=False,
             ce_broker_submitted=False,
         )
@@ -329,13 +357,15 @@ async def upload_single_certificate(
         db.commit()
         db.refresh(cpe_record)
 
-        return {
+        # Response varies by tier
+        response = {
             "status": "success",
-            "message": "Certificate uploaded and processed successfully",
+            "message": "Certificate processed successfully",
             "record_id": cpe_record.id,
-            "filename": file.filename,
+            "original_filename": file.filename,  # NEW: Always show original name
             "user_id": user.id,
             "user_name": user.full_name,
+            "storage_tier": storage_tier,  # NEW: Show user's tier
             "extracted_data": {
                 "course_name": cpe_record.course_name,
                 "provider_name": cpe_record.provider_name,
@@ -343,11 +373,7 @@ async def upload_single_certificate(
                 "completion_date": cpe_record.completion_date.isoformat(),
                 "field_of_study": cpe_record.field_of_study,
                 "is_ethics": cpe_record.is_ethics,
-                "extracted_text_preview": (
-                    extracted_text[:200] + "..."
-                    if len(extracted_text) > 200
-                    else extracted_text
-                ),
+                "course_code": cpe_record.course_code,
             },
             "database_record": {
                 "id": cpe_record.id,
@@ -357,6 +383,28 @@ async def upload_single_certificate(
                 "field_of_study": cpe_record.field_of_study,
             },
         }
+
+        # Add premium features info for free users
+        if storage_tier == "free":
+            response["upgrade_info"] = {
+                "premium_features": [
+                    "Secure cloud storage of certificates",
+                    "Smart filename organization",
+                    "Automatic CE Broker reporting",
+                    "Advanced compliance tracking",
+                    "Export to multiple formats",
+                ],
+                "message": "Upgrade to Premium to store certificates securely and automate CE Broker reporting!",
+            }
+        else:
+            # For paid users, include storage info
+            response["storage_info"] = {
+                "stored": is_stored,
+                "storage_url": certificate_url,
+                "smart_filename": cpe_record.certificate_filename,
+            }
+
+        return response
 
     except HTTPException:
         raise
@@ -369,11 +417,15 @@ async def upload_single_certificate(
 
 
 @router.post("/bulk-process-documents")
-async def bulk_upload_certificates(
+async def bulk_process_certificates(
     files: List[UploadFile] = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """
+    FREE: Process multiple certificates and extract data
+    PAID: Store all certificates securely with smart organization
+    """
     user = current_user
 
     results = []
@@ -382,6 +434,11 @@ async def bulk_upload_certificates(
     duplicate_count = 0
     error_count = 0
 
+    # Determine user's tier
+    storage_tier = "free"  # Default
+    # TODO: Check user subscription
+    # storage_tier = user.subscription_plan if hasattr(user, 'subscription_plan') else "free"
+
     for file in files:
         try:
             # Validate file type
@@ -389,7 +446,7 @@ async def bulk_upload_certificates(
             if not is_valid:
                 results.append(
                     {
-                        "filename": file.filename,
+                        "original_filename": file.filename,
                         "status": "failed",
                         "error": f"Unsupported file type: {file_ext}",
                     }
@@ -414,10 +471,11 @@ async def bulk_upload_certificates(
             if existing_record:
                 results.append(
                     {
-                        "filename": file.filename,
+                        "original_filename": file.filename,
                         "status": "duplicate",
                         "existing_record_id": existing_record.id,
                         "credits": float(existing_record.cpe_credits),
+                        "existing_original_filename": existing_record.original_filename,
                     }
                 )
                 duplicate_count += 1
@@ -426,6 +484,16 @@ async def bulk_upload_certificates(
             # Extract and parse
             extracted_text = extract_basic_text(file_content, file.filename)
             parsed_data = parse_certificate_data(extracted_text, file.filename)
+
+            # Handle storage based on tier
+            is_stored = storage_tier != "free"
+            certificate_url = None
+            smart_filename = None
+
+            # TODO: For paid users, upload to Digital Ocean
+            # if is_stored:
+            #     smart_filename = generate_smart_filename(parsed_data, file_ext)
+            #     certificate_url = upload_to_digital_ocean(file_content, smart_filename)
 
             # Create database record
             cpe_record = CPERecord(
@@ -438,8 +506,15 @@ async def bulk_upload_certificates(
                 delivery_method=parsed_data["delivery_method"],
                 completion_date=parsed_data["completion_date"],
                 is_ethics=parsed_data["is_ethics"],
-                certificate_filename=file.filename,
+                # File tracking
+                original_filename=file.filename,
+                certificate_filename=smart_filename,
+                certificate_url=certificate_url,
                 certificate_hash=file_hash,
+                # Business model
+                is_stored=is_stored,
+                storage_tier=storage_tier,
+                # Metadata
                 nasba_sponsor_id="112530",
                 extracted_at=datetime.utcnow(),
                 extraction_confidence=0.8,
@@ -453,20 +528,31 @@ async def bulk_upload_certificates(
             total_credits += parsed_data["cpe_credits"]
             saved_count += 1
 
-            results.append(
-                {
-                    "filename": file.filename,
-                    "status": "success",
-                    "record_id": cpe_record.id,
-                    "credits": parsed_data["cpe_credits"],
-                    "course_name": parsed_data["course_name"],
-                    "completion_date": parsed_data["completion_date"].isoformat(),
+            result = {
+                "original_filename": file.filename,
+                "status": "success",
+                "record_id": cpe_record.id,
+                "credits": parsed_data["cpe_credits"],
+                "course_name": parsed_data["course_name"],
+                "completion_date": parsed_data["completion_date"].isoformat(),
+            }
+
+            # Add storage info for paid users
+            if is_stored:
+                result["storage_info"] = {
+                    "smart_filename": smart_filename,
+                    "storage_url": certificate_url,
                 }
-            )
+
+            results.append(result)
 
         except Exception as e:
             results.append(
-                {"filename": file.filename, "status": "failed", "error": str(e)}
+                {
+                    "original_filename": file.filename,
+                    "status": "failed",
+                    "error": str(e),
+                }
             )
             error_count += 1
 
@@ -480,15 +566,32 @@ async def bulk_upload_certificates(
             detail=f"Database error: {str(e)}",
         )
 
-    return {
+    response = {
         "summary": {
             "total_files": len(files),
-            "saved_successfully": saved_count,
+            "processed_successfully": saved_count,
             "duplicates_found": duplicate_count,
             "processing_errors": error_count,
-            "total_credits_added": total_credits,
+            "total_credits_processed": total_credits,
             "user_name": user.full_name,
+            "storage_tier": storage_tier,
         },
         "results": results,
-        "status": "bulk_upload_complete",
+        "status": "bulk_processing_complete",
     }
+
+    # Add upgrade info for free users
+    if storage_tier == "free":
+        response["upgrade_info"] = {
+            "premium_features": [
+                "Secure cloud storage for all certificates",
+                "Smart filename organization",
+                "Bulk CE Broker reporting",
+                "Advanced compliance dashboard",
+                "Priority support",
+            ],
+            "processed_count": saved_count,
+            "message": f"Successfully processed {saved_count} certificates! Upgrade to Premium to store them securely and automate reporting.",
+        }
+
+    return response
