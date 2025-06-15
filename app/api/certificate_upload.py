@@ -268,7 +268,7 @@ async def upload_single_certificate(
             )
 
         # Get current user
-        user = get_current_user(db)
+        user = current_user
 
         # Read file content
         file_content = await file.read()
