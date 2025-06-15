@@ -109,7 +109,8 @@ async def get_api_routes():
     cert_routes = []
     ce_broker_routes = []
     auth_routes = []
-    jurisdiction_routes = []  # ADD THIS
+    jurisdiction_routes = []
+    compliance_routes = []  # ADD THIS
     core_routes = []
 
     for route in app.routes:
@@ -123,8 +124,10 @@ async def get_api_routes():
                 ce_broker_routes.append(route_info)
             elif route.path.startswith("/api/auth/"):
                 auth_routes.append(route_info)
-            elif route.path.startswith("/api/jurisdictions/"):  # ADD THIS
+            elif route.path.startswith("/api/jurisdictions/"):
                 jurisdiction_routes.append(route_info)
+            elif route.path.startswith("/api/compliance/"):  # ADD THIS
+                compliance_routes.append(route_info)
             elif route.path in ["/", "/health", "/routes"]:
                 core_routes.append(route_info)
 
@@ -143,13 +146,22 @@ async def get_api_routes():
         routes.append("   No authentication endpoints loaded")
     routes.append("")
 
-    # ADD JURISDICTION REQUIREMENTS SECTION
+    # Jurisdiction requirements
     routes.append("🌎 JURISDICTION REQUIREMENTS:")
     if jurisdiction_routes:
         for route in sorted(jurisdiction_routes):
             routes.append(f"   {route}")
     else:
         routes.append("   No jurisdiction requirements endpoints loaded")
+    routes.append("")
+
+    # ADD COMPLIANCE SECTION
+    routes.append("✅ COMPLIANCE CHECKING:")
+    if compliance_routes:
+        for route in sorted(compliance_routes):
+            routes.append(f"   {route}")
+    else:
+        routes.append("   No compliance endpoints loaded")
     routes.append("")
 
     # Certificate management
@@ -175,18 +187,18 @@ async def get_api_routes():
     routes.append("📊 ENDPOINT SUMMARY:")
     routes.append(f"   Core Endpoints: {len(core_routes)}")
     routes.append(f"   Authentication: {len(auth_routes)}")
-    routes.append(
-        f"   Jurisdiction Requirements: {len(jurisdiction_routes)}"
-    )  # ADD THIS
+    routes.append(f"   Jurisdiction Requirements: {len(jurisdiction_routes)}")
+    routes.append(f"   Compliance Checking: {len(compliance_routes)}")  # ADD THIS
     routes.append(f"   Certificate Management: {len(cert_routes)}")
     routes.append(f"   CE Broker Automation: {len(ce_broker_routes)}")
     routes.append(
-        f"   Total Endpoints: {len(core_routes) + len(auth_routes) + len(jurisdiction_routes) + len(cert_routes) + len(ce_broker_routes)}"  # UPDATE THIS
+        f"   Total Endpoints: {len(core_routes) + len(auth_routes) + len(jurisdiction_routes) + len(compliance_routes) + len(cert_routes) + len(ce_broker_routes)}"  # UPDATE THIS
     )
     routes.append("")
     routes.append("🎯 KEY FEATURES:")
     routes.append("   ├── Automated certificate processing")
-    routes.append("   ├── State-by-state CPE requirements lookup")  # ADD THIS
+    routes.append("   ├── State-by-state CPE requirements lookup")
+    routes.append("   ├── Real-time compliance monitoring")  # ADD THIS
     routes.append("   ├── NH compliance tracking (120 hours triennial)")
     routes.append("   ├── CE Broker 11-step automation")
     routes.append("   ├── Digital Ocean Spaces storage")

@@ -1,4 +1,4 @@
-# app/api/__init__.py - Updated with jurisdiction requirements (no compliance yet)
+# app/api/__init__.py - Updated with compliance router
 
 from fastapi import APIRouter
 
@@ -33,6 +33,18 @@ except ImportError as e:
     print(f"⚠️  Jurisdiction requirements router not available: {e}")
 except Exception as e:
     print(f"❌ Unexpected error loading jurisdiction requirements router: {e}")
+
+# Import and include compliance router
+try:
+    from .compliance import router as compliance_router
+
+    api_router.include_router(compliance_router)
+    print("✅ Compliance router loaded successfully")
+    print(f"   Compliance routes: {[route.path for route in compliance_router.routes]}")
+except ImportError as e:
+    print(f"⚠️  Compliance router not available: {e}")
+except Exception as e:
+    print(f"❌ Unexpected error loading compliance router: {e}")
 
 # Import and include certificate upload router
 try:
@@ -92,6 +104,7 @@ print(f"🏁 Total API routes loaded: {len(api_router.routes)}")
 print("📁 Available routers:")
 print("   ├── auth.py (authentication)")
 print("   ├── jurisdiction_requirements.py (state requirements)")
+print("   ├── compliance.py (compliance checking)")
 print("   ├── certificate_upload.py (uploads)")
 print("   ├── certificate_data.py (data management)")
 print("   ├── ce_broker_exports.py (CE Broker)")
@@ -117,3 +130,11 @@ if jurisdiction_routes:
     print(f"✅ Jurisdiction requirements ready: {len(jurisdiction_routes)} routes")
 else:
     print("❌ No jurisdiction routes found - check jurisdiction_requirements.py")
+
+compliance_routes = [
+    route.path for route in api_router.routes if "/compliance" in route.path
+]
+if compliance_routes:
+    print(f"✅ Compliance checking ready: {len(compliance_routes)} routes")
+else:
+    print("❌ No compliance routes found - check compliance.py")
