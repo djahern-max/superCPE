@@ -254,6 +254,7 @@ def parse_certificate_data(text: str, filename: str) -> dict:
 @router.post("/upload")
 async def upload_single_certificate(
     file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),  # Add this
     db: Session = Depends(get_db),
 ):
     """Upload and process a single CPE certificate"""
