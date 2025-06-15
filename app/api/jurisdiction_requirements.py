@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from datetime import date, datetime
 
@@ -66,7 +66,7 @@ class JurisdictionSummary(BaseModel):
 class JurisdictionComparison(BaseModel):
     jurisdiction_1: JurisdictionRequirements
     jurisdiction_2: JurisdictionRequirements
-    differences: Dict[str, Dict[str, any]]
+    differences: Dict[str, Dict[str, Any]]
 
 
 @router.get("/list", response_model=List[JurisdictionSummary])
