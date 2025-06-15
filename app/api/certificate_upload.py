@@ -251,7 +251,7 @@ def parse_certificate_data(text: str, filename: str) -> dict:
 # =================
 
 
-@router.post("/upload")
+@router.post("/process-document")
 async def upload_single_certificate(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),  # Add this
@@ -368,7 +368,7 @@ async def upload_single_certificate(
         )
 
 
-@router.post("/bulk-upload")
+@router.post("/bulk-process-documents")
 async def bulk_upload_certificates(
     files: List[UploadFile] = File(...),
     current_user: User = Depends(get_current_user),

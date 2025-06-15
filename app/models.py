@@ -124,10 +124,15 @@ class CPERecord(Base):
     reporting_period_start = Column(Date)  # Which reporting period this applies to
     reporting_period_end = Column(Date)
 
-    # Certificate Management
-    certificate_filename = Column(String)
-    certificate_url = Column(String)
-    certificate_hash = Column(String)  # For duplicate detection
+    # Original filename (for user reference)
+    original_filename = Column(String)  # User's original PDF name
+    # Organized storage filename (when they upgrade to paid)
+    certificate_filename = Column(String)  # Smart filename for storage
+    certificate_url = Column(String)  # Digital Ocean URL (paid feature)
+    certificate_hash = Column(String)  # Duplicate detection
+    # Business model support
+    is_stored = Column(Boolean, default=False)  # Has user paid for storage?
+    storage_tier = Column(String)  # "free", "premium", "enterprise"
 
     # Processing Metadata
     extracted_at = Column(DateTime, default=datetime.utcnow)
