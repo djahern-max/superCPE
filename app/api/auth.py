@@ -1,16 +1,23 @@
-# app/api/auth.py (Full JWT Authentication)
+# app/api/auth.py - Clean version with proper imports
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
-from pydantic import BaseModel
-import jwt  # This works with either python-jose or PyJWT
+import jwt
 from passlib.context import CryptContext
 
 from ..core.database import get_db
 from ..models import User
+from ..schemas.auth import (
+    UserRegistration,
+    UserLogin,
+    Token,
+    UserProfile,
+    RegistrationResponse,
+    LoginResponse,
+)
 
 # Security setup
 SECRET_KEY = (
@@ -26,33 +33,6 @@ router = APIRouter(
     prefix="/api/auth",
     tags=["Authentication"],
 )
-
-
-# Schemas
-class UserRegistration(BaseModel):
-    email: str
-    password: str
-    full_name: str
-
-
-class UserLogin(BaseModel):
-    email: str
-    password: str
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int
-    user_id: int
-
-
-class UserProfile(BaseModel):
-    id: int
-    email: str
-    full_name: str
-    primary_jurisdiction: Optional[str]
-    license_number: Optional[str]
 
 
 # Utility functions
@@ -104,9 +84,9 @@ async def test_auth():
     return {"message": "Auth router is working with JWT!", "version": "2.0"}
 
 
-@router.post("/register", response_model=dict)
+@router.post("/register", response_model=RegistrationResponse)
 async def register(user_data: UserRegistration, db: Session = Depends(get_db)):
-    """Register a new user with full JWT authentication"""
+    """Register a new user with configurable jurisdiction"""
 
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
@@ -118,12 +98,12 @@ async def register(user_data: UserRegistration, db: Session = Depends(get_db)):
     # Hash the password
     hashed_password = get_password_hash(user_data.password)
 
-    # Create new user
+    # Create new user - use jurisdiction from request or default to NH
     user = User(
         email=user_data.email,
         password_hash=hashed_password,
         full_name=user_data.full_name,
-        primary_jurisdiction="NH",  # Default
+        primary_jurisdiction=user_data.primary_jurisdiction,  # From schema, defaults to NH
         onboarding_step="registration",
         is_active=True,
         email_reminders=True,
@@ -149,22 +129,17 @@ async def register(user_data: UserRegistration, db: Session = Depends(get_db)):
         user_id=user.id,
     )
 
-    return {
-        "message": f"Welcome to SuperCPE, {user.full_name}!",
-        "user_id": user.id,
-        "token": token.dict(),
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "full_name": user.full_name,
-            "primary_jurisdiction": user.primary_jurisdiction,
-        },
-    }
+    return RegistrationResponse(
+        message=f"Welcome to SuperCPE, {user.full_name}!",
+        user_id=user.id,
+        next_step="basic_info",
+        token=token,
+    )
 
 
-@router.post("/login")
+@router.post("/login", response_model=LoginResponse)
 async def login_json(login_data: UserLogin, db: Session = Depends(get_db)):
-    """Login with JSON data (alternative to form data)"""
+    """Login with JSON data"""
 
     user = db.query(User).filter(User.email == login_data.email).first()
     if not user or not verify_password(login_data.password, user.password_hash):
@@ -183,19 +158,57 @@ async def login_json(login_data: UserLogin, db: Session = Depends(get_db)):
         data={"sub": user.email, "user_id": user.id}, expires_delta=access_token_expires
     )
 
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "full_name": user.full_name,
-            "primary_jurisdiction": user.primary_jurisdiction,
-            "license_number": user.license_number,
-        },
-        "message": f"Welcome back, {user.full_name}!",
-    }
+    token = Token(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user_id=user.id,
+    )
+
+    # Build user profile
+    user_profile = UserProfile(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        primary_jurisdiction=user.primary_jurisdiction,
+        license_number=user.license_number,
+        # Add other fields with defaults for now
+        license_issue_date=None,
+        next_renewal_date=None,
+        secondary_jurisdictions=None,
+        phone_number=None,
+        linkedin_url=None,
+        twitter_handle=None,
+        facebook_url=None,
+        instagram_handle=None,
+        website_url=None,
+        firm_name=None,
+        firm_website=None,
+        firm_phone=None,
+        firm_address_line1=None,
+        firm_address_line2=None,
+        firm_city=None,
+        firm_state=None,
+        firm_zip_code=None,
+        job_title=None,
+        years_experience=None,
+        specializations=None,
+        professional_certifications=None,
+        ce_broker_auto_sync=False,
+        email_reminders=True,
+        newsletter_subscription=False,
+        marketing_emails=False,
+        public_profile=False,
+        onboarding_step=user.onboarding_step or "registration",
+        created_at=user.created_at,
+    )
+
+    return LoginResponse(
+        message=f"Welcome back, {user.full_name}!",
+        token=token,
+        user=user_profile,
+        onboarding_required=(user.onboarding_step != "complete"),
+    )
 
 
 @router.get("/me", response_model=UserProfile)
@@ -208,6 +221,35 @@ async def get_current_user_profile(current_user: User = Depends(get_current_user
         full_name=current_user.full_name,
         primary_jurisdiction=current_user.primary_jurisdiction,
         license_number=current_user.license_number,
+        # Add other fields with defaults for now
+        license_issue_date=None,
+        next_renewal_date=None,
+        secondary_jurisdictions=None,
+        phone_number=None,
+        linkedin_url=None,
+        twitter_handle=None,
+        facebook_url=None,
+        instagram_handle=None,
+        website_url=None,
+        firm_name=None,
+        firm_website=None,
+        firm_phone=None,
+        firm_address_line1=None,
+        firm_address_line2=None,
+        firm_city=None,
+        firm_state=None,
+        firm_zip_code=None,
+        job_title=None,
+        years_experience=None,
+        specializations=None,
+        professional_certifications=None,
+        ce_broker_auto_sync=False,
+        email_reminders=True,
+        newsletter_subscription=False,
+        marketing_emails=False,
+        public_profile=False,
+        onboarding_step=current_user.onboarding_step or "registration",
+        created_at=current_user.created_at,
     )
 
 
