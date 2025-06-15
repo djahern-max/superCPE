@@ -118,73 +118,271 @@ def calculate_current_period(
     )
 
 
-def calculate_compliance_status(
+def calculate_nh_compliance_detailed(
     jurisdiction: CPAJurisdiction,
     cpe_records: List[CPERecord],
     current_period: ReportingPeriod,
-) -> QuickComplianceStatus:
-    """Calculate quick compliance status"""
+    license_date: date,
+) -> Dict[str, Any]:
+    """
+    Detailed NH compliance calculation with annual requirements
 
-    # Calculate total hours in current period
-    total_hours = sum(
-        record.cpe_credits or 0
+    NH Requirements:
+    - 120 hours over 3 years (triennial)
+    - 4 ethics hours over 3 years
+    - 20 hours minimum each year
+    - Renewal groups by last name (A-F, G-M, N-Z)
+    """
+
+    # Filter records for current triennial period
+    period_records = [
+        record
         for record in cpe_records
-        if current_period.period_start
-        <= record.completion_date
-        <= current_period.period_end
-    )
+        if current_period.period_start <= record.completion_date <= date.today()
+    ]
 
-    # Get requirements
-    hours_required = jurisdiction.general_hours_required or 0
-    ethics_required = jurisdiction.ethics_hours_required or 0
+    # Calculate total hours
+    total_hours = sum(record.cpe_credits or 0 for record in period_records)
 
-    # Calculate ethics hours
+    # Calculate ethics hours (look for ethics-related fields of study)
+    ethics_keywords = [
+        "ethics",
+        "professional responsibility",
+        "professional conduct",
+        "conduct",
+        "responsibility",
+    ]
     ethics_hours = sum(
         record.cpe_credits or 0
-        for record in cpe_records
-        if current_period.period_start
-        <= record.completion_date
-        <= current_period.period_end
-        and record.field_of_study
-        and "ethics" in record.field_of_study.lower()
+        for record in period_records
+        if record.field_of_study
+        and any(keyword in record.field_of_study.lower() for keyword in ethics_keywords)
     )
 
-    # Determine compliance
-    general_compliant = total_hours >= hours_required
-    ethics_compliant = ethics_hours >= ethics_required if ethics_required > 0 else True
+    # Check annual requirements (20 hours minimum each year)
+    annual_compliance = []
+    current_year = current_period.period_start.year
+    end_year = min(current_period.period_end.year, date.today().year)
 
-    is_compliant = general_compliant and ethics_compliant
-    compliance_percentage = (
-        (total_hours / hours_required * 100) if hours_required > 0 else 100
-    )
+    for year in range(current_year, end_year + 1):
+        year_start = date(year, 1, 1)
+        year_end = date(year, 12, 31)
+
+        # For current year, only count up to today
+        if year == date.today().year:
+            year_end = date.today()
+
+        year_records = [
+            record
+            for record in period_records
+            if year_start <= record.completion_date <= year_end
+        ]
+
+        year_hours = sum(record.cpe_credits or 0 for record in year_records)
+
+        annual_compliance.append(
+            {
+                "year": year,
+                "hours_completed": year_hours,
+                "hours_required": 20,
+                "is_compliant": year_hours >= 20,
+                "deficit": max(0, 20 - year_hours),
+                "records_count": len(year_records),
+            }
+        )
+
+    # Overall compliance checks
+    total_compliant = total_hours >= 120
+    ethics_compliant = ethics_hours >= 4
+    annual_compliant = all(year["is_compliant"] for year in annual_compliance)
+
+    overall_compliant = total_compliant and ethics_compliant and annual_compliant
+
+    # Calculate deficits
+    deficits = []
+    recommendations = []
+
+    if not total_compliant:
+        deficit = 120 - total_hours
+        deficits.append(f"Need {deficit:.1f} more total hours")
+        recommendations.append(
+            f"Upload certificates for {deficit:.1f} additional CPE hours"
+        )
+
+    if not ethics_compliant:
+        ethics_deficit = 4 - ethics_hours
+        deficits.append(f"Need {ethics_deficit:.1f} more ethics hours")
+        recommendations.append(
+            f"Complete {ethics_deficit:.1f} hours of ethics/professional responsibility training"
+        )
+
+    if not annual_compliant:
+        for year_data in annual_compliance:
+            if not year_data["is_compliant"]:
+                deficits.append(
+                    f"Need {year_data['deficit']:.1f} more hours for {year_data['year']}"
+                )
+                recommendations.append(
+                    f"Upload certificates from {year_data['year']} to meet 20-hour minimum"
+                )
 
     # Determine status
-    if is_compliant:
+    if overall_compliant:
         status = "Compliant"
-        next_action = f"You're compliant! Next renewal: {current_period.renewal_date}"
-    elif compliance_percentage >= 80:
+    elif total_hours >= 96:  # 80% of total requirement
         status = "At Risk"
-        needed = hours_required - total_hours
-        next_action = (
-            f"Complete {needed:.1f} more hours before {current_period.renewal_date}"
-        )
     else:
         status = "Non-Compliant"
-        needed = hours_required - total_hours
-        next_action = f"Upload {needed:.1f} hours of CPE immediately"
 
-    return QuickComplianceStatus(
-        is_compliant=is_compliant,
-        status=status,
-        total_hours_required=hours_required,
-        total_hours_completed=total_hours,
-        compliance_percentage=min(100, compliance_percentage),
-        days_until_renewal=current_period.days_remaining,
-        next_action=next_action,
+    return {
+        "overall_compliant": overall_compliant,
+        "status": status,
+        "total_hours": total_hours,
+        "ethics_hours": ethics_hours,
+        "annual_compliance": annual_compliance,
+        "deficits": deficits,
+        "recommendations": recommendations,
+        "compliance_breakdown": {
+            "total_requirement_met": total_compliant,
+            "ethics_requirement_met": ethics_compliant,
+            "annual_requirements_met": annual_compliant,
+        },
+    }
+
+
+def calculate_compliance_status_enhanced(
+    jurisdiction: CPAJurisdiction,
+    cpe_records: List[CPERecord],
+    current_period: ReportingPeriod,
+    license_date: date,
+) -> QuickComplianceStatus:
+    """Enhanced compliance calculation that handles state-specific rules"""
+
+    if jurisdiction.code == "NH":
+        # Use detailed NH logic
+        nh_result = calculate_nh_compliance_detailed(
+            jurisdiction, cpe_records, current_period, license_date
+        )
+
+        # Build next action message
+        if nh_result["overall_compliant"]:
+            next_action = (
+                f"✅ You're compliant! Next renewal: {current_period.renewal_date}"
+            )
+        else:
+            # Prioritize the most critical deficits
+            if nh_result["deficits"]:
+                next_action = "❌ " + nh_result["deficits"][0]
+            else:
+                next_action = "Review your CPE records for compliance issues"
+
+        return QuickComplianceStatus(
+            is_compliant=nh_result["overall_compliant"],
+            status=nh_result["status"],
+            total_hours_required=120,
+            total_hours_completed=nh_result["total_hours"],
+            compliance_percentage=min(100, (nh_result["total_hours"] / 120) * 100),
+            days_until_renewal=current_period.days_remaining,
+            next_action=next_action,
+        )
+
+    else:
+        # Fall back to simpler logic for other states
+        total_hours = sum(
+            record.cpe_credits or 0
+            for record in cpe_records
+            if current_period.period_start
+            <= record.completion_date
+            <= current_period.period_end
+        )
+
+        hours_required = jurisdiction.general_hours_required or 0
+        is_compliant = total_hours >= hours_required
+        compliance_percentage = (
+            (total_hours / hours_required * 100) if hours_required > 0 else 100
+        )
+
+        if is_compliant:
+            status = "Compliant"
+            next_action = (
+                f"You're compliant! Next renewal: {current_period.renewal_date}"
+            )
+        elif compliance_percentage >= 80:
+            status = "At Risk"
+            needed = hours_required - total_hours
+            next_action = (
+                f"Complete {needed:.1f} more hours before {current_period.renewal_date}"
+            )
+        else:
+            status = "Non-Compliant"
+            needed = hours_required - total_hours
+            next_action = f"Upload {needed:.1f} hours of CPE immediately"
+
+        return QuickComplianceStatus(
+            is_compliant=is_compliant,
+            status=status,
+            total_hours_required=hours_required,
+            total_hours_completed=total_hours,
+            compliance_percentage=min(100, compliance_percentage),
+            days_until_renewal=current_period.days_remaining,
+            next_action=next_action,
+        )
+
+
+@router.get("/nh-detailed", response_model=Dict[str, Any])
+async def get_nh_detailed_compliance(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    """
+    Detailed NH compliance report with year-by-year breakdown
+    Shows annual requirements, ethics hours, and specific deficits
+    """
+
+    if current_user.primary_jurisdiction != "NH":
+        raise HTTPException(
+            status_code=400,
+            detail="This endpoint is specifically for New Hampshire licensees",
+        )
+
+    if not current_user.license_issue_date:
+        raise HTTPException(
+            status_code=400, detail="Please complete license setup first"
+        )
+
+    # Get jurisdiction and records
+    jurisdiction = (
+        db.query(CPAJurisdiction).filter(CPAJurisdiction.code == "NH").first()
     )
 
+    cpe_records = db.query(CPERecord).filter(CPERecord.user_id == current_user.id).all()
 
-# API Endpoints
+    # Calculate current period
+    current_period = calculate_current_period(
+        jurisdiction, current_user.license_issue_date, date.today()
+    )
+
+    # Get detailed NH compliance
+    nh_details = calculate_nh_compliance_detailed(
+        jurisdiction, cpe_records, current_period, current_user.license_issue_date
+    )
+
+    return {
+        "user_info": {
+            "license_date": current_user.license_issue_date,
+            "current_period": {
+                "start": current_period.period_start,
+                "end": current_period.period_end,
+                "days_remaining": current_period.days_remaining,
+            },
+        },
+        "nh_requirements": {
+            "total_hours_required": 120,
+            "ethics_hours_required": 4,
+            "annual_minimum": 20,
+        },
+        "compliance_status": nh_details,
+        "next_steps": nh_details["recommendations"],
+    }
 
 
 @router.get("/setup-status", response_model=UserSetupStatus)
