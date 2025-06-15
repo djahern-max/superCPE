@@ -533,7 +533,9 @@ async def get_detailed_compliance_report(
     )
 
     # Get compliance status
-    status = calculate_compliance_status(jurisdiction, cpe_records, current_period)
+    status = calculate_compliance_status_enhanced(
+        jurisdiction, cpe_records, current_period, current_user.license_issue_date
+    )
 
     # Calculate detailed breakdown
     period_records = [
@@ -647,7 +649,9 @@ async def manual_compliance_check(
 
     # Calculate compliance for specified scenario
     current_period = calculate_current_period(jurisdiction, license_date, check_date)
-    return calculate_compliance_status(jurisdiction, cpe_records, current_period)
+    return calculate_compliance_status_enhanced(
+        jurisdiction, cpe_records, current_period, current_user.license_issue_date
+    )
 
 
 @router.put("/update-license")
