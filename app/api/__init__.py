@@ -1,4 +1,4 @@
-# app/api/__init__.py - FIXED VERSION
+# app/api/__init__.py - Updated with jurisdiction requirements (no compliance yet)
 
 from fastapi import APIRouter
 
@@ -7,7 +7,7 @@ api_router = APIRouter()
 
 print("🔍 Loading API routers...")
 
-# Import and include auth router - FIXED: Conditional loading
+# Import and include auth router
 try:
     from .auth import router as auth_router
 
@@ -20,7 +20,21 @@ except ImportError as e:
 except Exception as e:
     print(f"❌ Unexpected error loading auth router: {e}")
 
-# Import and include certificate upload router - FIXED: Better error handling
+# Import and include jurisdiction requirements router
+try:
+    from .jurisdiction_requirements import router as jurisdiction_router
+
+    api_router.include_router(jurisdiction_router)
+    print("✅ Jurisdiction requirements router loaded successfully")
+    print(
+        f"   Jurisdiction routes: {[route.path for route in jurisdiction_router.routes]}"
+    )
+except ImportError as e:
+    print(f"⚠️  Jurisdiction requirements router not available: {e}")
+except Exception as e:
+    print(f"❌ Unexpected error loading jurisdiction requirements router: {e}")
+
+# Import and include certificate upload router
 try:
     from .certificate_upload import router as upload_router
 
@@ -76,11 +90,12 @@ except Exception as e:
 
 print(f"🏁 Total API routes loaded: {len(api_router.routes)}")
 print("📁 Available routers:")
-print("   ├── certificate_upload.py (priority)")
-print("   ├── certificate_data.py")
-print("   ├── ce_broker_exports.py")
-print("   ├── file_management.py")
-print("   └── auth.py (if available)")
+print("   ├── auth.py (authentication)")
+print("   ├── jurisdiction_requirements.py (state requirements)")
+print("   ├── certificate_upload.py (uploads)")
+print("   ├── certificate_data.py (data management)")
+print("   ├── ce_broker_exports.py (CE Broker)")
+print("   └── file_management.py (file operations)")
 
 # Verify critical routes are loaded
 upload_routes = [route.path for route in api_router.routes if "/upload" in route.path]
@@ -88,3 +103,17 @@ if upload_routes:
     print(f"✅ Upload functionality ready: {upload_routes}")
 else:
     print("❌ No upload routes found - check certificate_upload.py")
+
+auth_routes = [route.path for route in api_router.routes if "/auth" in route.path]
+if auth_routes:
+    print(f"✅ Authentication ready: {len(auth_routes)} routes")
+else:
+    print("❌ No auth routes found - check auth.py")
+
+jurisdiction_routes = [
+    route.path for route in api_router.routes if "/jurisdictions" in route.path
+]
+if jurisdiction_routes:
+    print(f"✅ Jurisdiction requirements ready: {len(jurisdiction_routes)} routes")
+else:
+    print("❌ No jurisdiction routes found - check jurisdiction_requirements.py")
