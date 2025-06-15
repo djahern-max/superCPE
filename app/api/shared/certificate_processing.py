@@ -226,33 +226,47 @@ def parse_certificate_text(text: str) -> dict:
 
     # Extract completion date - CRITICAL FIX
     date_patterns = [
-        r"Date[:\s]*([A-Za-z]+,?\s+[A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # "Monday, June 2, 2025"
-        r"Date[:\s]*(\d{1,2}/\d{1,2}/\d{4})",  # "6/2/2025"
-        r"Date[:\s]*(\d{4}-\d{1,2}-\d{1,2})",  # "2025-06-02"
-        r"Date[:\s]*([A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # "June 2, 2025"
-        r"(\d{1,2}/\d{1,2}/\d{4})",  # Any MM/DD/YYYY in text
-        r"([A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # Any "Month Day, Year" in text
+        r"Date\s*:?\s*([A-Za-z]+,?\s+[A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # "Monday, June 2, 2025"
+        r"Date\s*:?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # "June 2, 2025"
+        r"Date\s*:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})",  # "6/2/2025"
+        r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})",  # Any MM/DD/YYYY
+        r"([A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # Any "Month Day, Year"
     ]
 
     for pattern in date_patterns:
         matches = re.findall(pattern, text, re.IGNORECASE)
-        for match in matches:
-            parsed_date = parse_date_string(match)
-            if parsed_date:
-                result["completion_date"] = parsed_date
+        for date_str in matches:
+            parsed_date = parse_date_properly(date_str.strip())
+            if parsed_date and date(2020, 1, 1) <= parsed_date <= date.today():
+                data["completion_date"] = parsed_date
                 break
-        if result["completion_date"] != date.today():
+        if data["completion_date"] != date.today():
             break
 
-    # Extract delivery method
-    if "self-study" in text.lower() or "self study" in text.lower():
-        result["delivery_method"] = "Self-Study"
-    elif "live" in text.lower() or "webinar" in text.lower():
-        result["delivery_method"] = "Live"
-    elif "online" in text.lower():
-        result["delivery_method"] = "Online"
+    def parse_date_properly(date_str: str) -> date:
+        """Parse various date formats properly"""
+        if not date_str:
+            return None
 
-    return result
+        # Clean up
+        date_str = date_str.replace(",", "").strip()
+
+        # Try all possible formats
+        formats = [
+            "%A %B %d %Y",  # "Monday June 2 2025"
+            "%B %d %Y",  # "June 2 2025"
+            "%m/%d/%Y",  # "6/2/2025"
+            "%m-%d-%Y",  # "6-2-2025"
+            "%Y-%m-%d",  # "2025-06-02"
+        ]
+
+        for fmt in formats:
+            try:
+                return datetime.strptime(date_str, fmt).date()
+            except ValueError:
+                continue
+
+        return None
 
 
 def parse_date_string(date_str: str) -> Optional[date]:
