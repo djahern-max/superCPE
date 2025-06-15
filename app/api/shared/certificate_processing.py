@@ -5,6 +5,7 @@ Shared utilities for certificate text extraction and parsing.
 """
 
 import hashlib
+import re
 from datetime import datetime, date
 from typing import Dict, Optional
 
@@ -16,8 +17,35 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
     return main_extract(file_content, filename)
 
 
+def parse_date_properly(date_str: str) -> Optional[date]:
+    """Parse various date formats properly - FIXED VERSION"""
+    if not date_str:
+        return None
+
+    # Clean up the date string
+    date_str = date_str.replace(",", "").strip()
+
+    # Try all possible formats that appear in your certificates
+    formats = [
+        "%A %B %d %Y",  # "Monday June 2 2025"
+        "%B %d %Y",  # "June 2 2025"
+        "%m/%d/%Y",  # "6/2/2025"
+        "%m-%d-%Y",  # "6-2-2025"
+        "%Y-%m-%d",  # "2025-06-02"
+        "%d/%m/%Y",  # "2/6/2025"
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str, fmt).date()
+        except ValueError:
+            continue
+
+    return None
+
+
 def parse_date(date_str: str) -> Optional[date]:
-    """Parse various date formats from certificates"""
+    """Parse various date formats from certificates - LEGACY FUNCTION"""
     if not date_str:
         return None
 
@@ -62,7 +90,7 @@ def parse_date(date_str: str) -> Optional[date]:
     except (ValueError, KeyError, IndexError):
         pass
 
-    return date.today()  # Default to today if parsing fails
+    return None  # Don't default to today - let calling function handle it
 
 
 def generate_file_hash(file_content: bytes) -> str:
@@ -127,9 +155,6 @@ def parse_certificate_text(text: str) -> dict:
     """
     Enhanced certificate text parsing with proper date extraction
     """
-    import re
-    from datetime import date, datetime
-
     # Initialize defaults
     result = {
         "raw_text": text,
@@ -224,7 +249,7 @@ def parse_certificate_text(text: str) -> dict:
     text_lower = text.lower()
     result["is_ethics"] = any(keyword in text_lower for keyword in ethics_keywords)
 
-    # Extract completion date - CRITICAL FIX
+    # Extract completion date - FIXED VERSION
     date_patterns = [
         r"Date\s*:?\s*([A-Za-z]+,?\s+[A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # "Monday, June 2, 2025"
         r"Date\s*:?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # "June 2, 2025"
@@ -238,40 +263,25 @@ def parse_certificate_text(text: str) -> dict:
         for date_str in matches:
             parsed_date = parse_date_properly(date_str.strip())
             if parsed_date and date(2020, 1, 1) <= parsed_date <= date.today():
-                data["completion_date"] = parsed_date
+                result["completion_date"] = parsed_date
                 break
-        if data["completion_date"] != date.today():
+        if result["completion_date"] != date.today():
             break
 
-    def parse_date_properly(date_str: str) -> date:
-        """Parse various date formats properly"""
-        if not date_str:
-            return None
+    # Extract delivery method
+    if "self-study" in text.lower() or "self study" in text.lower():
+        result["delivery_method"] = "Self-Study"
+    elif "live" in text.lower() or "webinar" in text.lower():
+        result["delivery_method"] = "Live"
+    elif "online" in text.lower():
+        result["delivery_method"] = "Online"
 
-        # Clean up
-        date_str = date_str.replace(",", "").strip()
-
-        # Try all possible formats
-        formats = [
-            "%A %B %d %Y",  # "Monday June 2 2025"
-            "%B %d %Y",  # "June 2 2025"
-            "%m/%d/%Y",  # "6/2/2025"
-            "%m-%d-%Y",  # "6-2-2025"
-            "%Y-%m-%d",  # "2025-06-02"
-        ]
-
-        for fmt in formats:
-            try:
-                return datetime.strptime(date_str, fmt).date()
-            except ValueError:
-                continue
-
-        return None
+    return result
 
 
 def parse_date_string(date_str: str) -> Optional[date]:
     """
-    Parse various date formats with better error handling
+    Parse various date formats with better error handling - LEGACY VERSION
     """
     if not date_str:
         return None
