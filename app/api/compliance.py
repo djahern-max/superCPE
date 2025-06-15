@@ -85,10 +85,120 @@ class DetailedComplianceReport(BaseModel):
 
 
 # Helper Functions (simplified versions from previous code)
-def calculate_current_period(
+def calculate_current_period_fixed(
     jurisdiction: CPAJurisdiction, license_date: date, check_date: date
 ) -> ReportingPeriod:
-    """Calculate current reporting period - simplified version"""
+    """
+    Calculate current reporting period with state-specific logic
+    Fixed for NH July 1 - June 30 cycles
+    """
+
+    if jurisdiction.code == "NH":
+        # NH uses July 1 - June 30 triennial cycles
+        return calculate_nh_reporting_period(license_date, check_date)
+    elif jurisdiction.code == "CA":
+        # CA uses biennial based on birth month - simplified for now
+        return calculate_ca_reporting_period(license_date, check_date)
+    else:
+        # Generic calculation for other states
+        return calculate_generic_reporting_period(
+            jurisdiction, license_date, check_date
+        )
+
+
+def calculate_nh_reporting_period(
+    license_date: date, check_date: date
+) -> ReportingPeriod:
+    """
+    Calculate NH triennial reporting period (July 1 - June 30)
+    NH has specific renewal groups based on last name:
+    - A-F: Renew in years ending in 3, 6, 9 (2023, 2026, 2029)
+    - G-M: Renew in years ending in 4, 7, 0 (2024, 2027, 2030)
+    - N-Z: Renew in years ending in 2, 5, 8 (2022, 2025, 2028)
+    """
+
+    # For now, use a simplified approach based on license date
+    # In production, you'd need the licensee's last name for proper grouping
+
+    current_year = check_date.year
+
+    # Find the current triennial cycle
+    # NH cycles are July 1 - June 30 over 3 years
+
+    # Determine which triennial period we're in
+    if check_date >= date(current_year, 7, 1):
+        # After July 1 - current cycle starts this year
+        cycle_start_year = current_year
+    else:
+        # Before July 1 - current cycle started last year
+        cycle_start_year = current_year - 1
+
+    # Calculate the triennial period boundaries
+    # Each period is 3 years: July 1, YYYY to June 30, YYYY+3
+    period_start = date(cycle_start_year - (cycle_start_year % 3), 7, 1)
+
+    # Adjust period start to align with triennial cycles
+    # NH renewal years: 2022, 2025, 2028, etc. (every 3 years)
+    while (
+        period_start > license_date
+        or period_start + relativedelta(years=3) <= check_date
+    ):
+        if period_start > license_date:
+            period_start = period_start - relativedelta(years=3)
+        else:
+            period_start = period_start + relativedelta(years=3)
+
+    period_end = date(period_start.year + 3, 6, 30)
+    renewal_date = period_end
+
+    # Calculate days remaining
+    days_remaining = (renewal_date - check_date).days
+
+    return ReportingPeriod(
+        period_start=period_start,
+        period_end=period_end,
+        period_type="triennial",
+        renewal_date=renewal_date,
+        days_remaining=max(0, days_remaining),
+    )
+
+
+def calculate_ca_reporting_period(
+    license_date: date, check_date: date
+) -> ReportingPeriod:
+    """
+    Calculate CA biennial reporting period
+    CA renewals are based on birth month in odd/even year cycles
+    Simplified version without birth month data
+    """
+
+    # Simplified: use 2-year cycles starting from license date
+    years_since_license = (check_date - license_date).days // 365
+    current_cycle = years_since_license // 2
+
+    period_start = license_date + relativedelta(years=current_cycle * 2)
+    period_end = period_start + relativedelta(years=2) - timedelta(days=1)
+
+    # CA renewal is typically last day of birth month
+    # Simplified: use end of period
+    renewal_date = period_end
+    days_remaining = (renewal_date - check_date).days
+
+    return ReportingPeriod(
+        period_start=period_start,
+        period_end=period_end,
+        period_type="biennial",
+        renewal_date=renewal_date,
+        days_remaining=max(0, days_remaining),
+    )
+
+
+def calculate_generic_reporting_period(
+    jurisdiction: CPAJurisdiction, license_date: date, check_date: date
+) -> ReportingPeriod:
+    """
+    Generic reporting period calculation for other states
+    """
 
     period_months = jurisdiction.reporting_period_months or 24
 
@@ -105,7 +215,6 @@ def calculate_current_period(
     )
     period_end = period_start + relativedelta(months=period_months) - timedelta(days=1)
 
-    # Simple renewal date calculation (can be enhanced per state)
     renewal_date = period_end
     days_remaining = (renewal_date - check_date).days
 
@@ -357,7 +466,7 @@ async def get_nh_detailed_compliance(
     cpe_records = db.query(CPERecord).filter(CPERecord.user_id == current_user.id).all()
 
     # Calculate current period
-    current_period = calculate_current_period(
+    current_period = calculate_current_period_fixed(
         jurisdiction, current_user.license_issue_date, date.today()
     )
 
@@ -494,11 +603,13 @@ async def get_dashboard_compliance(
     cpe_records = db.query(CPERecord).filter(CPERecord.user_id == current_user.id).all()
 
     # Calculate current period and compliance
-    current_period = calculate_current_period(
+    current_period = calculate_current_period_fixed(
         jurisdiction, current_user.license_issue_date, date.today()
     )
 
-    return calculate_compliance_status(jurisdiction, cpe_records, current_period)
+    current_period = calculate_current_period_fixed(
+        jurisdiction, cpe_records, current_period
+    )
 
 
 @router.get("/detailed-report", response_model=DetailedComplianceReport)
@@ -528,7 +639,7 @@ async def get_detailed_compliance_report(
     cpe_records = db.query(CPERecord).filter(CPERecord.user_id == current_user.id).all()
 
     # Calculate current period
-    current_period = calculate_current_period(
+    current_period = calculate_current_period_fixed(
         jurisdiction, current_user.license_issue_date, date.today()
     )
 
@@ -648,7 +759,9 @@ async def manual_compliance_check(
     cpe_records = db.query(CPERecord).filter(CPERecord.user_id == current_user.id).all()
 
     # Calculate compliance for specified scenario
-    current_period = calculate_current_period(jurisdiction, license_date, check_date)
+    current_period = calculate_current_period_fixed(
+        jurisdiction, license_date, check_date
+    )
     return calculate_compliance_status_enhanced(
         jurisdiction, cpe_records, current_period, current_user.license_issue_date
     )

@@ -16,13 +16,6 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
     return main_extract(file_content, filename)
 
 
-def parse_certificate_text(text: str) -> dict:
-    """Parse certificate text - imported from main logic"""
-    from ...main import parse_certificate_text as main_parse
-
-    return main_parse(text)
-
-
 def parse_date(date_str: str) -> Optional[date]:
     """Parse various date formats from certificates"""
     if not date_str:
@@ -131,14 +124,174 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
 
 
 def parse_certificate_text(text: str) -> dict:
-    """Simple parsing to avoid errors"""
-    from datetime import date
+    """
+    Enhanced certificate text parsing with proper date extraction
+    """
+    import re
+    from datetime import date, datetime
 
-    return {
+    # Initialize defaults
+    result = {
         "raw_text": text,
-        "course_title": "Test Course",
-        "completion_date": date.today(),  # Always use today
-        "hours": 1.0,  # Fixed value for testing
-        "provider": "Test Provider",
+        "course_title": "Unknown Course",
+        "completion_date": date.today(),  # Fallback to today if no date found
+        "hours": 0.0,
+        "provider": "Unknown Provider",
         "subject": "General",
+        "course_code": None,
+        "field_of_study": "Accounting",
+        "delivery_method": "Self-Study",
+        "is_ethics": False,
     }
+
+    if not text:
+        return result
+
+    # Extract course title
+    course_patterns = [
+        r"for successfully completing\s+([^\n]+)",
+        r"Course[:\s]*([^\n]+)",
+        r"Subject[:\s]*([^\n]+)",
+    ]
+
+    for pattern in course_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            result["course_title"] = match.group(1).strip()
+            break
+
+    # Extract course code
+    code_patterns = [r"Course Code[:\s]*([A-Z0-9\-]+)", r"Code[:\s]*([A-Z0-9\-]+)"]
+
+    for pattern in code_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            result["course_code"] = match.group(1).strip()
+            break
+
+    # Extract CPE credits/hours
+    hours_patterns = [
+        r"CPE\s*Credits?[:\s]*(\d+\.?\d*)",
+        r"(\d+\.?\d*)\s*CPE",
+        r"(\d+\.?\d*)\s*hours?",
+        r"Credits?[:\s]*(\d+\.?\d*)",
+    ]
+
+    for pattern in hours_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            try:
+                result["hours"] = float(match.group(1))
+                break
+            except ValueError:
+                continue
+
+    # Extract provider/sponsor
+    provider_patterns = [
+        r"(MasterCPE|NASBA|AICPA|[A-Z][a-z]+\s+[A-Z][a-z]+)\s*\n.*Education",
+        r"Sponsor[:\s]*([^\n]+)",
+        r"Provider[:\s]*([^\n]+)",
+    ]
+
+    for pattern in provider_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            result["provider"] = match.group(1).strip()
+            break
+
+    # Extract field of study
+    field_patterns = [
+        r"Field of Study[:\s]*([^\n]+)",
+        r"Subject[:\s]*([^\n]+)",
+        r"Category[:\s]*([^\n]+)",
+    ]
+
+    for pattern in field_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            field = match.group(1).strip()
+            result["field_of_study"] = field
+            result["subject"] = field
+            break
+
+    # Check if it's ethics
+    ethics_keywords = [
+        "ethics",
+        "professional responsibility",
+        "professional conduct",
+        "conduct",
+    ]
+    text_lower = text.lower()
+    result["is_ethics"] = any(keyword in text_lower for keyword in ethics_keywords)
+
+    # Extract completion date - CRITICAL FIX
+    date_patterns = [
+        r"Date[:\s]*([A-Za-z]+,?\s+[A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # "Monday, June 2, 2025"
+        r"Date[:\s]*(\d{1,2}/\d{1,2}/\d{4})",  # "6/2/2025"
+        r"Date[:\s]*(\d{4}-\d{1,2}-\d{1,2})",  # "2025-06-02"
+        r"Date[:\s]*([A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # "June 2, 2025"
+        r"(\d{1,2}/\d{1,2}/\d{4})",  # Any MM/DD/YYYY in text
+        r"([A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # Any "Month Day, Year" in text
+    ]
+
+    for pattern in date_patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        for match in matches:
+            parsed_date = parse_date_string(match)
+            if parsed_date:
+                result["completion_date"] = parsed_date
+                break
+        if result["completion_date"] != date.today():
+            break
+
+    # Extract delivery method
+    if "self-study" in text.lower() or "self study" in text.lower():
+        result["delivery_method"] = "Self-Study"
+    elif "live" in text.lower() or "webinar" in text.lower():
+        result["delivery_method"] = "Live"
+    elif "online" in text.lower():
+        result["delivery_method"] = "Online"
+
+    return result
+
+
+def parse_date_string(date_str: str) -> Optional[date]:
+    """
+    Parse various date formats with better error handling
+    """
+    if not date_str:
+        return None
+
+    # Clean up the date string
+    date_str = date_str.strip().replace(",", "")
+
+    # List of date formats to try
+    date_formats = [
+        "%B %d %Y",  # "June 2 2025"
+        "%b %d %Y",  # "Jun 2 2025"
+        "%m/%d/%Y",  # "6/2/2025"
+        "%m-%d-%Y",  # "6-2-2025"
+        "%Y-%m-%d",  # "2025-06-02"
+        "%d/%m/%Y",  # "2/6/2025"
+        "%A %B %d %Y",  # "Monday June 2 2025"
+        "%A, %B %d, %Y",  # "Monday, June 2, 2025"
+    ]
+
+    # Try each format
+    for fmt in date_formats:
+        try:
+            return datetime.strptime(date_str, fmt).date()
+        except ValueError:
+            continue
+
+    # Try parsing with dateutil if available
+    try:
+        from dateutil.parser import parse as dateutil_parse
+
+        parsed = dateutil_parse(date_str)
+        return parsed.date()
+    except (ImportError, ValueError):
+        pass
+
+    # If all else fails, return None (will default to today in calling function)
+    return None
