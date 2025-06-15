@@ -89,7 +89,7 @@ def parse_certificate_data(text: str, filename: str) -> dict:
         "provider_name": "Unknown Provider",
         "field_of_study": "General",
         "cpe_credits": 0.0,
-        "completion_date": date.today(),
+        "completion_date": None,  # ✅ Start with None instead of today
         "delivery_method": "Self-Study",
         "is_ethics": False,
         "extracted_text": text,
@@ -195,11 +195,11 @@ def parse_certificate_data(text: str, filename: str) -> dict:
     # DATE EXTRACTION - FIXED
     # =================
     date_patterns = [
-        r"Date\s*:?\s*([A-Za-z]+,?\s+[A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # "Monday, June 2, 2025"
-        r"Date\s*:?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # "June 2, 2025"
-        r"Date\s*:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})",  # "6/2/2025"
-        r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})",  # Any MM/DD/YYYY
-        r"([A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # Any "Month Day, Year"
+        r"Date\s*:?\s*([A-Za-z]+,?\s+[A-Za-z]+\s+\d{1,2},?\s+\d{4})",
+        r"Date\s*:?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})",
+        r"Date\s*:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})",
+        r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})",
+        r"([A-Za-z]+\s+\d{1,2},?\s+\d{4})",
     ]
 
     for pattern in date_patterns:
@@ -209,40 +209,22 @@ def parse_certificate_data(text: str, filename: str) -> dict:
             if parsed_date and date(2020, 1, 1) <= parsed_date <= date.today():
                 data["completion_date"] = parsed_date
                 break
-        if data["completion_date"] != date.today():
+        if data["completion_date"] is not None:  # ✅ Stop when we find a valid date
             break
 
     # =================
-    # ETHICS DETECTION
+    # HANDLE MISSING DATE - NEW SECTION
     # =================
-    ethics_keywords = [
-        "ethics",
-        "ethical",
-        "professional responsibility",
-        "professional conduct",
-        "integrity",
-        "independence",
-    ]
-    if any(keyword in text_lower for keyword in ethics_keywords):
-        data["is_ethics"] = True
-
-    # =================
-    # FIELD OF STUDY DETECTION
-    # =================
-    field_mapping = {
-        "accounting": ["accounting", "financial", "gaap", "fasb", "audit"],
-        "taxation": ["tax", "taxation", "irs", "revenue", "deduction"],
-        "auditing": ["audit", "auditing", "assurance", "review", "compilation"],
-        "consulting": ["consulting", "advisory", "business", "management"],
-        "ethics": ["ethics", "ethical", "professional responsibility"],
-        "regulatory": ["regulation", "compliance", "law", "legal"],
-        "technology": ["technology", "software", "digital", "cyber", "it"],
-    }
-
-    for field, keywords in field_mapping.items():
-        if any(keyword in text_lower for keyword in keywords):
-            data["field_of_study"] = field.title()
-            break
+    if data["completion_date"] is None:
+        # Date extraction failed - add flags for the response
+        data["requires_manual_date"] = True
+        data["date_extraction_status"] = "failed"
+        # Use placeholder date for database compatibility
+        data["completion_date"] = date(1900, 1, 1)  # Obviously invalid date
+    else:
+        # Date extraction succeeded
+        data["requires_manual_date"] = False
+        data["date_extraction_status"] = "success"
 
     # Default to 1.0 credits if none found
     if data["cpe_credits"] == 0.0:
