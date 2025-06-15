@@ -16,42 +16,178 @@ router = APIRouter(
 )
 
 
-# Response Models
+# Replace your existing JurisdictionRequirements model in jurisdiction_requirements.py
+
+
 class JurisdictionRequirements(BaseModel):
     # Basic Information
     code: str
     name: str
-    board_name: Optional[str]
-    board_website: Optional[str]
-    licensing_website: Optional[str]
+    board_name: Optional[str] = None
+    board_website: Optional[str] = None
+    licensing_website: Optional[str] = None
 
-    # CPE Requirements
+    # Core CPE Requirements
     general_hours_required: int
-    ethics_hours_required: Optional[int]
-    live_hours_required: Optional[int]
-    minimum_hours_per_year: Optional[int]
+    ethics_hours_required: Optional[int] = None
+    live_hours_required: Optional[int] = None
+    minimum_hours_per_year: Optional[int] = None
 
     # Reporting Details
-    reporting_period_type: Optional[str]
-    reporting_period_months: Optional[int]
-    reporting_period_description: Optional[str]
-    renewal_date_pattern: Optional[str]
+    reporting_period_type: Optional[str] = None
+    reporting_period_months: Optional[int] = None
+    reporting_period_description: Optional[str] = None
+    renewal_date_pattern: Optional[str] = None
 
-    # Special Rules
-    self_study_max_hours: Optional[int]
-    carry_forward_max_hours: Optional[int]
+    # Study Options & Flexibility
+    self_study_max_hours: Optional[int] = None
+    carry_forward_max_hours: Optional[int] = None
 
     # CE Broker Information
-    ce_broker_required: Optional[bool]
-    ce_broker_mandatory_date: Optional[date]
+    ce_broker_required: Optional[bool] = None
+    ce_broker_mandatory_date: Optional[date] = None
 
-    # Data Quality
-    data_confidence: Optional[float]
-    nasba_last_updated: Optional[date]
-    updated_at: Optional[datetime]
+    # Technical & Specialized Requirements
+    technical_hours_required: Optional[int] = None
+    technical_hours_per_year: Optional[int] = None
+    regulatory_review_hours: Optional[int] = None
+    regulatory_review_frequency_months: Optional[int] = None
+    regulatory_review_passing_score: Optional[int] = None
+    government_audit_hours: Optional[int] = None
+    accounting_auditing_hours: Optional[int] = None
+    preparation_engagement_hours: Optional[int] = None
+    fraud_hours_required: Optional[int] = None
+
+    # New Licensee Requirements
+    new_licensee_hours_per_six_months: Optional[int] = None
+    new_licensee_regulatory_review_required: Optional[bool] = None
+
+    # Course Requirements
+    interactive_courses_required: Optional[bool] = None
+    minimum_course_length_hours: Optional[int] = None
+    ethics_course_minimum_length_hours: Optional[int] = None
+    ethics_exam_passing_score: Optional[int] = None
+
+    # Special Requirements & Notes
+    special_requirements: Optional[str] = None
+
+    # Data Quality & Metadata
+    data_source: Optional[str] = None
+    data_confidence: Optional[float] = None
+    nasba_last_updated: Optional[date] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+    # Custom method to provide user-friendly display of requirements
+    def get_requirement_summary(self) -> dict:
+        """Generate a user-friendly summary of all requirements"""
+        summary = {}
+
+        # Core requirements
+        summary["core_requirements"] = {
+            "total_hours": self.general_hours_required or "Not specified",
+            "ethics_hours": self.ethics_hours_required or "Not required",
+            "live_hours": self.live_hours_required or "Not required",
+            "minimum_per_year": self.minimum_hours_per_year or "Not specified",
+        }
+
+        # Reporting cycle
+        summary["reporting_cycle"] = {
+            "period_type": self.reporting_period_type or "Not specified",
+            "period_length": (
+                f"{self.reporting_period_months} months"
+                if self.reporting_period_months
+                else "Not specified"
+            ),
+            "renewal_pattern": self.renewal_date_pattern or "Not specified",
+        }
+
+        # Flexibility options
+        summary["flexibility"] = {
+            "self_study_allowed": (
+                f"Up to {self.self_study_max_hours} hours"
+                if self.self_study_max_hours
+                else "Not specified"
+            ),
+            "carry_forward": (
+                f"Up to {self.carry_forward_max_hours} hours"
+                if self.carry_forward_max_hours
+                else "Not allowed"
+            ),
+        }
+
+        # CE Broker status
+        summary["ce_broker"] = {
+            "required": "Yes" if self.ce_broker_required else "No",
+            "mandatory_date": (
+                self.ce_broker_mandatory_date.strftime("%B %d, %Y")
+                if self.ce_broker_mandatory_date
+                else "N/A"
+            ),
+        }
+
+        # Specialized requirements
+        specialized = {}
+        if self.technical_hours_required:
+            specialized["technical_hours"] = (
+                f"{self.technical_hours_required} hours required"
+            )
+        if self.regulatory_review_hours:
+            specialized["regulatory_review"] = (
+                f"{self.regulatory_review_hours} hours required"
+            )
+        if self.government_audit_hours:
+            specialized["government_audit"] = (
+                f"{self.government_audit_hours} hours required"
+            )
+        if self.fraud_hours_required:
+            specialized["fraud_training"] = (
+                f"{self.fraud_hours_required} hours required"
+            )
+
+        summary["specialized_requirements"] = (
+            specialized if specialized else {"status": "None specified"}
+        )
+
+        # New licensee requirements
+        if (
+            self.new_licensee_hours_per_six_months
+            or self.new_licensee_regulatory_review_required
+        ):
+            summary["new_licensee"] = {
+                "hours_per_six_months": self.new_licensee_hours_per_six_months
+                or "Not specified",
+                "regulatory_review_required": (
+                    "Yes" if self.new_licensee_regulatory_review_required else "No"
+                ),
+            }
+        else:
+            summary["new_licensee"] = {"status": "Same as regular licensees"}
+
+        # Course requirements
+        course_reqs = {}
+        if self.interactive_courses_required is not None:
+            course_reqs["interactive_required"] = (
+                "Yes" if self.interactive_courses_required else "No"
+            )
+        if self.minimum_course_length_hours:
+            course_reqs["minimum_course_length"] = (
+                f"{self.minimum_course_length_hours} hours"
+            )
+        if self.ethics_exam_passing_score:
+            course_reqs["ethics_exam_score"] = (
+                f"{self.ethics_exam_passing_score}% required"
+            )
+
+        summary["course_requirements"] = (
+            course_reqs
+            if course_reqs
+            else {"status": "Standard course requirements apply"}
+        )
+
+        return summary
 
 
 class JurisdictionSummary(BaseModel):
