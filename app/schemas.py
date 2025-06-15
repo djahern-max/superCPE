@@ -145,6 +145,12 @@ class ComplianceSummary(BaseModel):
 # =================
 
 
+from pydantic import BaseModel, Field
+from typing import Optional
+from decimal import Decimal
+from datetime import date
+
+
 class CPAJurisdictionBase(BaseModel):
     code: str = Field(..., min_length=2, max_length=2)
     name: str
@@ -161,6 +167,24 @@ class CPAJurisdictionCreate(CPAJurisdictionBase):
     reporting_period_description: Optional[str] = None
     ce_broker_required: bool = False
 
+    # Enhanced fields
+    technical_hours_required: Optional[int] = None
+    technical_hours_per_year: Optional[int] = None
+    regulatory_review_hours: Optional[int] = None
+    regulatory_review_frequency_months: Optional[int] = None
+    government_audit_hours: Optional[int] = None
+    accounting_auditing_hours: Optional[int] = None
+    preparation_engagement_hours: Optional[int] = None
+    fraud_hours_required: Optional[int] = None
+    new_licensee_hours_per_six_months: Optional[int] = None
+    new_licensee_regulatory_review_required: Optional[bool] = None
+    interactive_courses_required: Optional[bool] = None
+    minimum_course_length_hours: Optional[Decimal] = None
+    ethics_course_minimum_length_hours: Optional[Decimal] = None
+    ethics_exam_passing_score: Optional[int] = None
+    regulatory_review_passing_score: Optional[int] = None
+    special_requirements: Optional[str] = None
+
 
 class CPAJurisdictionResponse(CPAJurisdictionBase):
     board_name: Optional[str]
@@ -171,6 +195,24 @@ class CPAJurisdictionResponse(CPAJurisdictionBase):
     carry_forward_max_hours: Optional[int]
     ce_broker_required: bool
     nasba_last_updated: Optional[date]
+
+    # Enhanced fields
+    technical_hours_required: Optional[int]
+    technical_hours_per_year: Optional[int]
+    regulatory_review_hours: Optional[int]
+    regulatory_review_frequency_months: Optional[int]
+    government_audit_hours: Optional[int]
+    accounting_auditing_hours: Optional[int]
+    preparation_engagement_hours: Optional[int]
+    fraud_hours_required: Optional[int]
+    new_licensee_hours_per_six_months: Optional[int]
+    new_licensee_regulatory_review_required: Optional[bool]
+    interactive_courses_required: Optional[bool]
+    minimum_course_length_hours: Optional[Decimal]
+    ethics_course_minimum_length_hours: Optional[Decimal]
+    ethics_exam_passing_score: Optional[int]
+    regulatory_review_passing_score: Optional[int]
+    special_requirements: Optional[str]
 
     class Config:
         from_attributes = True
@@ -183,6 +225,24 @@ class CPAJurisdictionUpdate(BaseModel):
     reporting_period_type: Optional[ReportingPeriodType] = None
     board_website: Optional[str] = None
     ce_broker_required: Optional[bool] = None
+
+    # Enhanced fields for updates
+    technical_hours_required: Optional[int] = None
+    technical_hours_per_year: Optional[int] = None
+    regulatory_review_hours: Optional[int] = None
+    regulatory_review_frequency_months: Optional[int] = None
+    government_audit_hours: Optional[int] = None
+    accounting_auditing_hours: Optional[int] = None
+    preparation_engagement_hours: Optional[int] = None
+    fraud_hours_required: Optional[int] = None
+    new_licensee_hours_per_six_months: Optional[int] = None
+    new_licensee_regulatory_review_required: Optional[bool] = None
+    interactive_courses_required: Optional[bool] = None
+    minimum_course_length_hours: Optional[Decimal] = None
+    ethics_course_minimum_length_hours: Optional[Decimal] = None
+    ethics_exam_passing_score: Optional[int] = None
+    regulatory_review_passing_score: Optional[int] = None
+    special_requirements: Optional[str] = None
 
 
 # =================

@@ -195,7 +195,7 @@ class CPAJurisdiction(Base):
     board_website = Column(String(500))
     licensing_website = Column(String(500))
 
-    # CPE Requirements (from NASBA)
+    # Basic CPE Requirements (from NASBA)
     general_hours_required = Column(Integer, nullable=False)
     ethics_hours_required = Column(Integer, default=0)
     live_hours_required = Column(Integer, default=0)
@@ -214,6 +214,46 @@ class CPAJurisdiction(Base):
     # CE Broker
     ce_broker_required = Column(Boolean, default=False)
     ce_broker_mandatory_date = Column(Date)
+
+    # ENHANCED FIELDS - Technical Subject Requirements
+    technical_hours_required = Column(Integer)  # Minimum technical hours per period
+    technical_hours_per_year = Column(Integer)  # Minimum technical hours per year
+
+    # ENHANCED FIELDS - Regulatory Review Requirements
+    regulatory_review_hours = Column(Integer)  # Hours required for regulatory review
+    regulatory_review_frequency_months = Column(Integer)  # How often required (months)
+
+    # ENHANCED FIELDS - Specialized Requirements
+    government_audit_hours = Column(Integer)  # Required for government auditing
+    accounting_auditing_hours = Column(Integer)  # Required for A&A work
+    preparation_engagement_hours = Column(Integer)  # Required for prep engagements
+    fraud_hours_required = Column(Integer)  # Additional fraud hours when applicable
+
+    # ENHANCED FIELDS - New Licensee Requirements
+    new_licensee_hours_per_six_months = Column(Integer)  # Hours per 6-month period
+    new_licensee_regulatory_review_required = Column(
+        Boolean
+    )  # First renewal requirement
+
+    # ENHANCED FIELDS - Course Requirements
+    interactive_courses_required = Column(Boolean)  # Must courses be interactive/tested
+    minimum_course_length_hours = Column(
+        DECIMAL(3, 1)
+    )  # Minimum individual course length
+    ethics_course_minimum_length_hours = Column(
+        DECIMAL(3, 1)
+    )  # Minimum ethics course length
+
+    # ENHANCED FIELDS - Exam/Test Requirements
+    ethics_exam_passing_score = Column(
+        Integer
+    )  # Required passing score for ethics (percentage)
+    regulatory_review_passing_score = Column(
+        Integer
+    )  # Required passing score for reg review
+
+    # ENHANCED FIELDS - Special Requirements
+    special_requirements = Column(Text)  # Additional jurisdiction-specific requirements
 
     # NASBA Data Tracking
     nasba_last_updated = Column(Date)
