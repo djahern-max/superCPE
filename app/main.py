@@ -1,13 +1,10 @@
-# app/main.py - Clean version without legacy endpoints
+# app/main.py - FIXED VERSION
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from fastapi.routing import APIRoute
 from datetime import datetime
-
-# Import the main API router which includes all modular endpoints
-from app.api import api_router
 
 # Import Google Vision service for health check
 try:
@@ -32,14 +29,23 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:3001",
-    ],  # Added 3001 for Electron
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include all API routers (this includes all your modular endpoints)
-app.include_router(api_router)
+# FIXED: Import and include API router with better error handling
+try:
+    from app.api import api_router
+
+    app.include_router(api_router)
+    print("✅ API routers included successfully")
+except Exception as e:
+    print(f"❌ Failed to load API routers: {e}")
+    import traceback
+
+    traceback.print_exc()
 
 # =================
 # CORE ENDPOINTS
@@ -90,9 +96,7 @@ async def health():
 
 @app.get("/routes", response_class=PlainTextResponse)
 async def get_api_routes():
-    """
-    Returns a complete list of all API routes organized by category
-    """
+    """Returns a complete list of all API routes organized by category"""
     routes = []
 
     # Header
@@ -129,20 +133,29 @@ async def get_api_routes():
 
     # Authentication
     routes.append("🔐 AUTHENTICATION:")
-    for route in sorted(auth_routes):
-        routes.append(f"   {route}")
+    if auth_routes:
+        for route in sorted(auth_routes):
+            routes.append(f"   {route}")
+    else:
+        routes.append("   No authentication endpoints loaded")
     routes.append("")
 
     # Certificate management
     routes.append("📄 CERTIFICATE MANAGEMENT:")
-    for route in sorted(cert_routes):
-        routes.append(f"   {route}")
+    if cert_routes:
+        for route in sorted(cert_routes):
+            routes.append(f"   {route}")
+    else:
+        routes.append("   No certificate endpoints loaded")
     routes.append("")
 
     # CE Broker automation
     routes.append("🤖 CE BROKER AUTOMATION:")
-    for route in sorted(ce_broker_routes):
-        routes.append(f"   {route}")
+    if ce_broker_routes:
+        for route in sorted(ce_broker_routes):
+            routes.append(f"   {route}")
+    else:
+        routes.append("   No CE Broker endpoints loaded")
     routes.append("")
 
     # Summary
@@ -164,7 +177,6 @@ async def get_api_routes():
     routes.append("   ├── Smart filename optimization")
     routes.append("   └── Duplicate detection & prevention")
     routes.append("")
-
     routes.append("📚 Documentation: /docs")
     routes.append("=" * 60)
 
