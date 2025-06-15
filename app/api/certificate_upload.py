@@ -371,10 +371,10 @@ async def upload_single_certificate(
 @router.post("/bulk-upload")
 async def bulk_upload_certificates(
     files: List[UploadFile] = File(...),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload and process multiple CPE certificates"""
-    user = get_current_user(db)
+    user = current_user
 
     results = []
     total_credits = 0.0
