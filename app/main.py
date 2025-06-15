@@ -164,12 +164,7 @@ async def get_api_routes():
     routes.append("   ├── Smart filename optimization")
     routes.append("   └── Duplicate detection & prevention")
     routes.append("")
-    routes.append("🚀 QUICK START:")
-    routes.append("   1. POST /api/certificates/process-test-certificates")
-    routes.append("   2. GET  /api/certificates/summary")
-    routes.append("   3. GET  /api/ce-broker/prepare-submissions")
-    routes.append("   4. GET  /api/ce-broker/export-instructions.pdf")
-    routes.append("")
+
     routes.append("📚 Documentation: /docs")
     routes.append("=" * 60)
 
