@@ -53,6 +53,33 @@ def extract_basic_text(file_content: bytes, filename: str) -> str:
         return f"Vision extraction failed: {str(e)}"
 
 
+def parse_date_properly(date_str: str) -> date:
+    """Parse various date formats properly - FIXED VERSION"""
+    if not date_str:
+        return None
+
+    # Clean up the date string
+    date_str = date_str.replace(",", "").strip()
+
+    # Try all possible formats that appear in certificates
+    formats = [
+        "%A %B %d %Y",  # "Monday June 2 2025"
+        "%B %d %Y",  # "June 2 2025"
+        "%m/%d/%Y",  # "6/2/2025"
+        "%m-%d-%Y",  # "6-2-2025"
+        "%Y-%m-%d",  # "2025-06-02"
+        "%d/%m/%Y",  # "2/6/2025"
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str, fmt).date()
+        except ValueError:
+            continue
+
+    return None
+
+
 def parse_certificate_data(text: str, filename: str) -> dict:
     """Enhanced certificate data parser with better pattern recognition"""
     # Initialize with defaults
@@ -165,31 +192,25 @@ def parse_certificate_data(text: str, filename: str) -> dict:
                 continue
 
     # =================
-    # DATE EXTRACTION
+    # DATE EXTRACTION - FIXED
     # =================
     date_patterns = [
-        r"(?:completed?|dated?|issued)\s*:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})",
-        r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})",
-        r"(\w+\s+\d{1,2},?\s+\d{4})",
-        r"(\d{1,2}\s+\w+\s+\d{4})",
+        r"Date\s*:?\s*([A-Za-z]+,?\s+[A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # "Monday, June 2, 2025"
+        r"Date\s*:?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # "June 2, 2025"
+        r"Date\s*:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})",  # "6/2/2025"
+        r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})",  # Any MM/DD/YYYY
+        r"([A-Za-z]+\s+\d{1,2},?\s+\d{4})",  # Any "Month Day, Year"
     ]
 
     for pattern in date_patterns:
         matches = re.findall(pattern, text, re.IGNORECASE)
         for date_str in matches:
-            try:
-                for fmt in ["%m/%d/%Y", "%m-%d-%Y", "%d/%m/%Y", "%d-%m-%Y"]:
-                    try:
-                        parsed_date = datetime.strptime(date_str, fmt).date()
-                        if date(2020, 1, 1) <= parsed_date <= date.today():
-                            data["completion_date"] = parsed_date
-                            break
-                    except ValueError:
-                        continue
-                if data["completion_date"] != date.today():
-                    break
-            except:
-                continue
+            parsed_date = parse_date_properly(date_str.strip())
+            if parsed_date and date(2020, 1, 1) <= parsed_date <= date.today():
+                data["completion_date"] = parsed_date
+                break
+        if data["completion_date"] != date.today():
+            break
 
     # =================
     # ETHICS DETECTION
