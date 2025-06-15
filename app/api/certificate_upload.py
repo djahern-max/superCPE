@@ -11,6 +11,7 @@ from datetime import datetime, date
 import hashlib
 import io
 import re
+from app.api.auth import get_current_user
 
 from app.models import CPERecord, User
 from app.core.database import get_db
@@ -26,24 +27,6 @@ router = APIRouter(
 # =================
 # UTILITY FUNCTIONS
 # =================
-
-
-def get_current_user(db: Session) -> User:
-    """Get or create a default user for testing - replace with real auth later"""
-    user = db.query(User).filter(User.email == "test@example.com").first()
-    if not user:
-        # Create default user if doesn't exist
-        user = User(
-            email="test@example.com",
-            password_hash="dummy_hash",
-            full_name="Test User",
-            primary_jurisdiction="NH",
-            onboarding_completed=True,
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    return user
 
 
 def generate_file_hash(file_content: bytes) -> str:
