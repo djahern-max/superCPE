@@ -262,9 +262,303 @@ async def get_current_user_for_upload(db: Session = Depends(get_db)):
     return user
 
 
-# =================
-# UPLOAD ENDPOINTS
-# =================
+def validate_extracted_data(data: dict) -> list:
+    """
+    Validate extracted data quality and return list of issues
+    """
+    issues = []
+
+    # Check course name quality
+    if data["course_name"] in [
+        "Unknown Course",
+        "the Course",
+        "Completion Certificate",
+    ]:
+        issues.append("course_name_unclear")
+
+    # Check date validity
+    if data.get("requires_manual_date") or data["completion_date"] == date(1900, 1, 1):
+        issues.append("completion_date_invalid")
+
+    # Check credits reasonableness
+    if data["cpe_credits"] <= 0 or data["cpe_credits"] > 40:
+        issues.append("credits_unreasonable")
+
+    # Check provider identification
+    if data["provider_name"] in ["Unknown Provider", ""]:
+        issues.append("provider_unclear")
+
+    return issues
+
+
+def generate_manual_entry_form(extracted_data: dict, quality_issues: list) -> dict:
+    """
+    Generate a form structure for manual data entry
+    """
+    return {
+        "form_fields": [
+            {
+                "field": "course_name",
+                "label": "Course Name",
+                "type": "text",
+                "required": True,
+                "suggested_value": extracted_data.get("course_name", ""),
+                "needs_attention": "course_name_unclear" in quality_issues,
+            },
+            {
+                "field": "completion_date",
+                "label": "Completion Date",
+                "type": "date",
+                "required": True,
+                "suggested_value": (
+                    extracted_data.get("completion_date")
+                    if extracted_data.get("completion_date") != date(1900, 1, 1)
+                    else ""
+                ),
+                "needs_attention": "completion_date_invalid" in quality_issues,
+            },
+            {
+                "field": "cpe_credits",
+                "label": "CPE Credits/Hours",
+                "type": "number",
+                "required": True,
+                "suggested_value": extracted_data.get("cpe_credits", ""),
+                "needs_attention": "credits_unreasonable" in quality_issues,
+            },
+            {
+                "field": "provider_name",
+                "label": "Provider/Sponsor",
+                "type": "text",
+                "required": True,
+                "suggested_value": extracted_data.get("provider_name", ""),
+                "needs_attention": "provider_unclear" in quality_issues,
+            },
+            {
+                "field": "field_of_study",
+                "label": "Field of Study",
+                "type": "select",
+                "options": [
+                    "Accounting",
+                    "Auditing",
+                    "Taxation",
+                    "Ethics",
+                    "Technology",
+                    "Management",
+                    "Other",
+                ],
+                "suggested_value": extracted_data.get("field_of_study", "Accounting"),
+            },
+            {
+                "field": "is_ethics",
+                "label": "Ethics Course",
+                "type": "checkbox",
+                "suggested_value": extracted_data.get("is_ethics", False),
+            },
+        ],
+        "quality_issues": quality_issues,
+        "instructions": "Some data could not be automatically extracted. Please review and correct the information below.",
+    }
+
+
+# ADD THIS NEW ENHANCED ENDPOINT
+@router.post("/upload-enhanced")
+async def upload_certificate_enhanced(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user_for_upload),
+    db: Session = Depends(get_db),
+):
+    """
+    Enhanced upload that provides graceful failure handling and manual entry guidance
+    """
+    try:
+        # Validate file type
+        is_valid, file_ext = validate_file_type(file.filename)
+        if not is_valid:
+            return {
+                "status": "unsupported_format",
+                "manual_entry_required": True,
+                "error_details": f"File type {file_ext} not supported for auto-processing",
+                "manual_entry_form": generate_manual_entry_form(
+                    {}, ["unsupported_format"]
+                ),
+                "filename": file.filename,
+            }
+
+        # Read file content
+        file_content = await file.read()
+        if len(file_content) == 0:
+            return {
+                "status": "empty_file",
+                "manual_entry_required": True,
+                "error_details": "Empty file uploaded",
+                "manual_entry_form": generate_manual_entry_form({}, ["empty_file"]),
+                "filename": file.filename,
+            }
+
+        # Generate file hash for duplicate detection
+        file_hash = generate_file_hash(file_content)
+
+        # Check for duplicates
+        existing_record = (
+            db.query(CPERecord)
+            .filter(
+                CPERecord.certificate_hash == file_hash,
+                CPERecord.user_id == current_user.id,
+            )
+            .first()
+        )
+
+        if existing_record:
+            return {
+                "status": "duplicate",
+                "message": "Certificate already exists in database",
+                "existing_record_id": existing_record.id,
+                "filename": file.filename,
+            }
+
+        # Extract text from certificate
+        try:
+            extracted_text = extract_basic_text(file_content, file.filename)
+            if not extracted_text or len(extracted_text) < 10:
+                return {
+                    "status": "extraction_failed",
+                    "manual_entry_required": True,
+                    "error_details": "Could not extract readable text from document",
+                    "manual_entry_form": generate_manual_entry_form(
+                        {}, ["extraction_failed"]
+                    ),
+                    "filename": file.filename,
+                }
+        except Exception as e:
+            return {
+                "status": "extraction_error",
+                "manual_entry_required": True,
+                "error_details": f"Text extraction failed: {str(e)}",
+                "manual_entry_form": generate_manual_entry_form(
+                    {}, ["extraction_error"]
+                ),
+                "filename": file.filename,
+            }
+
+        # Parse certificate data
+        parsed_data = parse_certificate_data(extracted_text, file.filename)
+
+        # Validate data quality
+        quality_issues = validate_extracted_data(parsed_data)
+
+        if quality_issues:
+            # Data quality issues - offer manual entry
+            return {
+                "status": "needs_review",
+                "manual_entry_required": True,
+                "extracted_data": parsed_data,
+                "quality_issues": quality_issues,
+                "error_details": f"Data quality issues found: {', '.join(quality_issues)}",
+                "manual_entry_form": generate_manual_entry_form(
+                    parsed_data, quality_issues
+                ),
+                "filename": file.filename,
+            }
+        else:
+            # Auto-processing succeeded - save to database
+            cpe_record = CPERecord(
+                user_id=current_user.id,
+                course_name=parsed_data["course_name"],
+                course_code=parsed_data["course_code"],
+                provider_name=parsed_data["provider_name"],
+                field_of_study=parsed_data["field_of_study"],
+                cpe_credits=parsed_data["cpe_credits"],
+                delivery_method=parsed_data["delivery_method"],
+                completion_date=parsed_data["completion_date"],
+                is_ethics=parsed_data["is_ethics"],
+                original_filename=file.filename,
+                certificate_filename=file.filename,
+                certificate_hash=file_hash,
+                is_stored=False,
+                storage_tier="free",
+                nasba_sponsor_id="112530",
+                extracted_at=datetime.utcnow(),
+                extraction_confidence=0.8,
+                manually_verified=False,
+                ce_broker_submitted=False,
+            )
+
+            db.add(cpe_record)
+            db.commit()
+            db.refresh(cpe_record)
+
+            return {
+                "status": "success",
+                "message": "Certificate processed automatically",
+                "record_id": cpe_record.id,
+                "manual_entry_required": False,
+                "extracted_data": {
+                    "course_name": cpe_record.course_name,
+                    "provider_name": cpe_record.provider_name,
+                    "cpe_credits": float(cpe_record.cpe_credits),
+                    "completion_date": cpe_record.completion_date.isoformat(),
+                    "field_of_study": cpe_record.field_of_study,
+                    "is_ethics": cpe_record.is_ethics,
+                },
+            }
+
+    except Exception as e:
+        db.rollback()
+        return {
+            "status": "processing_error",
+            "manual_entry_required": True,
+            "error_details": f"Unexpected error: {str(e)}",
+            "manual_entry_form": generate_manual_entry_form({}, ["processing_error"]),
+            "filename": file.filename,
+        }
+
+
+# ADD THIS ENDPOINT FOR MANUAL ENTRIES
+@router.post("/manual-entry")
+async def submit_manual_entry(
+    manual_data: dict,
+    current_user: User = Depends(get_current_user_for_upload),
+    db: Session = Depends(get_db),
+):
+    """
+    Accept manually entered certificate data
+    """
+    # Validate required fields
+    required_fields = ["course_name", "completion_date", "cpe_credits", "provider_name"]
+    for field in required_fields:
+        if not manual_data.get(field):
+            raise HTTPException(400, f"Missing required field: {field}")
+
+    # Create record from manual entry
+    cpe_record = CPERecord(
+        user_id=current_user.id,
+        course_name=manual_data["course_name"],
+        completion_date=datetime.strptime(
+            manual_data["completion_date"], "%Y-%m-%d"
+        ).date(),
+        cpe_credits=float(manual_data["cpe_credits"]),
+        provider_name=manual_data["provider_name"],
+        field_of_study=manual_data.get("field_of_study", "Accounting"),
+        is_ethics=manual_data.get("is_ethics", False),
+        delivery_method=manual_data.get("delivery_method", "Unknown"),
+        original_filename=manual_data.get("filename", "Manual Entry"),
+        certificate_hash=f"manual_{datetime.now().timestamp()}",  # Unique hash for manual entries
+        is_stored=False,
+        storage_tier="free",
+        extracted_at=datetime.utcnow(),
+        manually_verified=True,
+        ce_broker_submitted=False,
+    )
+
+    db.add(cpe_record)
+    db.commit()
+    db.refresh(cpe_record)
+
+    return {
+        "status": "success",
+        "message": "Manual entry saved successfully",
+        "record_id": cpe_record.id,
+    }
 
 
 @router.post("/upload")
