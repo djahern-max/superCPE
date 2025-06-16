@@ -361,7 +361,7 @@ def generate_manual_entry_form(extracted_data: dict, quality_issues: list) -> di
 
 
 # ADD THIS NEW ENHANCED ENDPOINT
-@router.post("/upload-enhanced")
+@router.post("/upload")
 async def upload_certificate_enhanced(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user_for_upload),
@@ -559,136 +559,6 @@ async def submit_manual_entry(
         "message": "Manual entry saved successfully",
         "record_id": cpe_record.id,
     }
-
-
-@router.post("/upload")
-async def upload_single_certificate(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user_for_upload),
-    db: Session = Depends(get_db),
-):
-    """Upload and process a single CPE certificate"""
-    try:
-        # Validate file type
-        is_valid, file_ext = validate_file_type(file.filename)
-        if not is_valid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported file type. Supported: PDF, JPG, PNG, TIFF",
-            )
-
-        user = current_user
-
-        # Read file content
-        file_content = await file.read()
-        if len(file_content) == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file uploaded"
-            )
-
-        # Generate file hash for duplicate detection
-        file_hash = generate_file_hash(file_content)
-
-        # Check for duplicates
-        existing_record = (
-            db.query(CPERecord)
-            .filter(
-                CPERecord.certificate_hash == file_hash, CPERecord.user_id == user.id
-            )
-            .first()
-        )
-
-        if existing_record:
-            return {
-                "status": "duplicate",
-                "message": "Certificate already exists in database",
-                "existing_record_id": existing_record.id,
-                "filename": file.filename,
-                "user_id": user.id,
-            }
-
-        # Extract text from certificate
-        extracted_text = extract_basic_text(file_content, file.filename)
-
-        # Parse certificate data
-        parsed_data = parse_certificate_data(extracted_text, file.filename)
-
-        # Create database record
-        cpe_record = CPERecord(
-            user_id=user.id,
-            course_name=parsed_data["course_name"],
-            course_code=parsed_data["course_code"],
-            provider_name=parsed_data["provider_name"],
-            field_of_study=parsed_data["field_of_study"],
-            cpe_credits=parsed_data["cpe_credits"],
-            delivery_method=parsed_data["delivery_method"],
-            completion_date=parsed_data["completion_date"],
-            is_ethics=parsed_data["is_ethics"],
-            original_filename=file.filename,  # NEW: Store original filename
-            certificate_filename=file.filename,
-            certificate_hash=file_hash,
-            is_stored=False,  # NEW: Free tier
-            storage_tier="free",  # NEW: Business model
-            nasba_sponsor_id="112530",
-            extracted_at=datetime.utcnow(),
-            extraction_confidence=0.8,
-            manually_verified=False,
-            ce_broker_submitted=False,
-        )
-
-        # Save to database
-        db.add(cpe_record)
-        db.commit()
-        db.refresh(cpe_record)
-
-        return {
-            "status": "success",
-            "message": "Certificate uploaded and processed successfully",
-            "record_id": cpe_record.id,
-            "original_filename": file.filename,  # NEW
-            "user_id": user.id,
-            "user_name": user.full_name,
-            "storage_tier": "free",  # NEW
-            "extracted_data": {
-                "course_name": cpe_record.course_name,
-                "provider_name": cpe_record.provider_name,
-                "cpe_credits": float(cpe_record.cpe_credits),
-                "completion_date": cpe_record.completion_date.isoformat(),
-                "field_of_study": cpe_record.field_of_study,
-                "is_ethics": cpe_record.is_ethics,
-                "course_code": cpe_record.course_code,
-                "extracted_text_preview": (
-                    extracted_text[:200] + "..."
-                    if len(extracted_text) > 200
-                    else extracted_text
-                ),
-            },
-            "database_record": {
-                "id": cpe_record.id,
-                "course_name": cpe_record.course_name,
-                "credits": float(cpe_record.cpe_credits),
-                "completion_date": cpe_record.completion_date.isoformat(),
-                "field_of_study": cpe_record.field_of_study,
-            },
-            "upgrade_info": {  # NEW: Business model
-                "premium_features": [
-                    "Secure cloud storage of certificates",
-                    "Smart filename organization",
-                    "Automatic CE Broker reporting",
-                    "Advanced compliance tracking",
-                ],
-                "message": "Upgrade to Premium to store certificates securely!",
-            },
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Processing failed: {str(e)}",
-        )
 
 
 @router.post("/bulk-upload")
