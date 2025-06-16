@@ -82,11 +82,14 @@ class USState(str, Enum):
 # =================
 
 
+# In app/schemas/auth.py, replace the existing password validators with these simplified versions:
+
+
 class UserRegistration(BaseModel):
     """User registration with configurable jurisdiction"""
 
     email: EmailStr
-    password: str = Field(..., min_length=8, max_length=100)
+    password: str = Field(..., min_length=6, max_length=100)  # Changed from 8 to 6
     full_name: str = Field(..., min_length=2, max_length=100)
     primary_jurisdiction: str = Field(
         default="NH",
@@ -95,12 +98,10 @@ class UserRegistration(BaseModel):
 
     @validator("password")
     def validate_password(cls, v):
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-        if not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain at least one digit")
-        if not any(c.isupper() for c in v):
-            raise ValueError("Password must contain at least one uppercase letter")
+        if len(v) < 6:  # Changed from 8 to 6
+            raise ValueError("Password must be at least 6 characters long")
+        # REMOVED: digit requirement
+        # REMOVED: uppercase letter requirement
         return v
 
     @validator("primary_jurisdiction")
@@ -109,6 +110,32 @@ class UserRegistration(BaseModel):
         v = v.upper()
         if v not in [state.value for state in USState]:
             raise ValueError(f"Invalid jurisdiction. Must be a valid US state code.")
+        return v
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=6, max_length=100)  # Changed from 8 to 6
+
+    @validator("new_password")
+    def validate_password(cls, v):
+        if len(v) < 6:  # Changed from 8 to 6
+            raise ValueError("Password must be at least 6 characters long")
+        # REMOVED: digit requirement
+        # REMOVED: uppercase letter requirement
+        return v
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=6, max_length=100)  # Changed from 8 to 6
+
+    @validator("new_password")
+    def validate_password(cls, v):
+        if len(v) < 6:  # Changed from 8 to 6
+            raise ValueError("Password must be at least 6 characters long")
+        # REMOVED: digit requirement
+        # REMOVED: uppercase letter requirement
         return v
 
 
